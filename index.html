@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CKC / ATP Weekly Sales Tracker</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#161a21; --panel2:#1c222b; --line:#2a3240;
+  --tx:#e7ecf3; --tx2:#9aa7b8; --tx3:#6c7a8d;
+  --acc:#4f9cf9; --good:#3ddc97; --bad:#ff6b6b; --warn:#ffb454;
+  --am:#7c9cff; --pm:#c58cff; --atp:#4fd1c5;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f6f9; --panel:#fff; --panel2:#f7f9fc; --line:#dfe5ee;
+         --tx:#141a22; --tx2:#5a6878; --tx3:#8b98a8; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1420px;margin:0 auto;padding:18px 18px 70px}
+h1{font-size:19px;margin:0;letter-spacing:-.2px}
+h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2);margin:0 0 10px}
+.sub{color:var(--tx3);font-size:12px;margin-top:3px}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:12px}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+button{font:inherit;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+  border-radius:7px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.pri:hover{filter:brightness(1.1)}
+button.go{background:var(--good);border-color:var(--good);color:#05231a;font-weight:700}
+button.sm{padding:4px 9px;font-size:12px}
+button.danger:hover{border-color:var(--bad);color:var(--bad)}
+select,input[type=text],input[type=number],input[type=date]{font:inherit;background:var(--panel2);
+  color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--tx2)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:right;white-space:nowrap}
+th{background:var(--panel2);font-weight:600;font-size:11px;color:var(--tx2);text-align:right}
+th.lbl,td.lbl{text-align:left;font-weight:600;background:var(--panel2)}
+td.num{font-family:var(--mono);font-size:12.5px}
+tr.tot td{font-weight:700;background:var(--panel2)}
+td.total-col,th.total-col{background:var(--panel2);font-weight:700}
+.cellin{width:100%;min-width:60px;border:0;background:transparent;color:var(--tx);text-align:right;
+  font-family:var(--mono);font-size:12.5px;padding:0}
+.cellin:focus{outline:1px solid var(--acc);border-radius:3px}
+.swatch{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:6px;vertical-align:1px}
+.badge{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:20px;
+  border:1px solid var(--line);color:var(--tx2);background:var(--panel2)}
+.badge.lock{border-color:var(--good);color:var(--good)}
+.badge.open{border-color:var(--warn);color:var(--warn)}
+.badge.csv{border-color:var(--acc);color:var(--acc)}
+.good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)} .dim{color:var(--tx3)}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--tx2);
+  cursor:pointer;transition:.15s}
+#drop.hot{border-color:var(--acc);background:rgba(79,156,249,.07);color:var(--tx)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:10px}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3)}
+.kpi .v{font-size:20px;font-weight:700;font-family:var(--mono);margin-top:3px}
+.kpi .n{font-size:11px;color:var(--tx3);margin-top:2px}
+.alert{border-left:3px solid var(--warn);background:rgba(255,180,84,.08);padding:9px 12px;
+  border-radius:0 7px 7px 0;font-size:12.5px;margin-bottom:6px}
+.alert.b{border-left-color:var(--bad);background:rgba(255,107,107,.08)}
+.alert.g{border-left-color:var(--good);background:rgba(61,220,151,.08)}
+.alert.i{border-left-color:var(--acc);background:rgba(79,156,249,.08)}
+.hr{height:1px;background:var(--line);margin:13px 0}
+.fcard{display:flex;align-items:center;gap:11px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:8px;padding:8px 11px;margin-bottom:6px;flex-wrap:wrap}
+.fcard .nm{font-family:var(--mono);font-size:12px;flex:1;min-width:150px;overflow:hidden;text-overflow:ellipsis}
+details summary{cursor:pointer;color:var(--tx2);font-size:12.5px}
+.mini{font-size:11.5px;color:var(--tx3)}
+.strip{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:4px}
+.strip .b{flex:1;min-width:5px;background:var(--line);border-radius:2px 2px 0 0;cursor:pointer;
+  position:relative;transition:.12s}
+.strip .b:hover{background:var(--acc)}
+.strip .b.on{background:var(--acc)}
+.strip .b.part{background:repeating-linear-gradient(45deg,var(--warn),var(--warn) 3px,transparent 3px,transparent 6px)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel);
+  border:1px solid var(--acc);padding:9px 16px;border-radius:8px;font-size:13px;max-width:80vw;
+  opacity:0;pointer-events:none;transition:.2s;z-index:99}
+#toast.on{opacity:1}
+.scroll{overflow-x:auto}
+code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 4px;border-radius:3px}
+ol.steps{margin:8px 0 0;padding-left:20px;font-size:13px;line-height:1.75}
+ol.steps b{color:var(--tx)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>Clever Koi Central &nbsp;/&nbsp; Across the Pond</h1>
+    <div class="sub">Weekly sales tracker &mdash; drop the Toast exports, the week fills itself in</div>
+  </div>
+  <div class="row">
+    <button class="pri" onclick="document.getElementById('loadjson').click()">Open workbook</button>
+    <input type="file" id="loadjson" accept=".json" style="display:none" onchange="loadFile(this)">
+    <button onclick="saveFile()">Save workbook</button>
+    <button onclick="exportXlsx()">Export for Drive</button>
+    <button class="sm" onclick="exportCsv()">CSV</button>
+  </div>
+</div>
+
+<div id="dirtyBar"></div>
+<div id="firstRun"></div>
+
+<!-- ═══ 1 IMPORT ═══ -->
+<div class="panel">
+  <h2>1 &middot; Drop the Toast exports</h2>
+  <div class="mini" style="margin-bottom:9px">
+    Toast &rarr; <em>Sales by day</em>, one export per bucket:
+    <span class="swatch" style="background:var(--am)"></span><strong>CKC Lunch</strong> 10am&ndash;3pm,
+    <span class="swatch" style="background:var(--pm)"></span><strong>CKC Dinner</strong> 3pm&ndash;close,
+    <span class="swatch" style="background:var(--atp)"></span><strong>ATP</strong> 5pm&ndash;close.
+    Any date range, any number of weeks &mdash; pull twelve months at once if you want to backfill.
+  </div>
+  <div id="drop"><strong>Drop CSVs here</strong> or click to choose</div>
+  <input type="file" id="csvin" accept=".csv,.txt,.tsv" multiple style="display:none">
+  <div id="staged"></div>
+  <div id="importPreview"></div>
+</div>
+
+<!-- ═══ 2 WEEK ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <h2 style="margin:0">2 &middot; Week</h2>
+      <div class="mini" id="weekMeta" style="margin-top:4px"></div>
+    </div>
+    <div class="row">
+      <select id="weekSel" onchange="state.cur=this.value;state.through='full';persist();render()"></select>
+      <button class="sm" onclick="shiftWeek(-1)">&larr;</button>
+      <button class="sm" onclick="shiftWeek(1)">&rarr;</button>
+      <button class="sm" onclick="gotoToday()">Today</button>
+    </div>
+  </div>
+  <div class="strip" id="strip"></div>
+  <div class="mini" id="stripNote" style="margin:3px 0 12px"></div>
+  <div class="grid2" id="kpis"></div>
+  <div id="flags" style="margin-top:11px"></div>
+</div>
+
+<!-- ═══ 3 VARIANCE ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">3 &middot; Projection vs actual</h2>
+    <label class="f" style="flex-direction:row;align-items:center;gap:7px">
+      <span>Compare through</span>
+      <select id="through" onchange="state.through=this.value;render()"></select>
+    </label>
+  </div>
+  <div class="mini" id="throughNote" style="margin:7px 0 10px"></div>
+  <div class="scroll"><div id="varTable"></div></div>
+</div>
+
+<!-- ═══ 4 ACTUALS ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">4 &middot; Actuals</h2>
+    <span id="actSrc"></span>
+  </div>
+  <div class="mini" style="margin:6px 0 10px">
+    All three buckets come from their own export and TOTAL NET is their sum, so it always reconciles.
+    Blank means no export has covered that day yet; <span class="dim">closed</span> means the export covered it and
+    Toast reported nothing. Type over any cell to override.
+  </div>
+  <div class="scroll"><div id="actTable"></div></div>
+</div>
+
+<!-- ═══ 5 PROJECTIONS ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">5 &middot; Projections for this week</h2>
+    <div class="row" id="projCtl"></div>
+  </div>
+  <div class="mini" style="margin:6px 0 10px" id="projNote"></div>
+  <div class="scroll"><div id="projTable"></div></div>
+  <div id="revLog"></div>
+</div>
+
+<!-- ═══ 6 NEXT WEEK ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">6 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
+    <div class="row">
+      <button class="sm" onclick="seedNext('proj')">Copy this projection</button>
+      <button class="sm" onclick="seedNext('act')">Copy this actual</button>
+      <button class="pri sm" onclick="commitNext()">Commit &amp; lock</button>
+    </div>
+  </div>
+  <div class="mini" style="margin:6px 0 9px" id="nextNote"></div>
+  <div class="row" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:11px">
+    <label class="f">Weekly net target
+      <input type="text" id="tgt" placeholder="e.g. 52000" style="width:120px"></label>
+    <label class="f">Shape it from
+      <select id="basis"></select></label>
+    <button class="go" onclick="distribute()">Distribute across the week</button>
+    <span class="mini" id="basisNote" style="flex:1;min-width:200px"></span>
+  </div>
+  <div class="scroll"><div id="nextTable"></div></div>
+  <div id="mixNote"></div>
+</div>
+
+<!-- ═══ 7 COVERS ═══ -->
+<details class="panel">
+  <summary><strong>7 &middot; Covers &amp; average check</strong> &mdash; <span class="warn">indicative only, not verified</span></summary>
+  <div class="alert" style="margin-top:11px">
+    <strong>Treat these as rough.</strong> The net sales figures are confirmed to be scoped correctly per bucket &mdash;
+    lunch, dinner and ATP sum exactly to the day totals from the original spreadsheet, so the revenue-center filter is
+    doing its job on dollars. The <em>order and guest counts</em> have not been confirmed the same way: the Toast account
+    is Clever Koi with ATP as a revenue center, so a count may cover the whole account rather than the one bucket.
+    If it does, average check here is understated and ATP guests are counted twice.
+    Nothing else in this tool uses these numbers &mdash; projections and variance are dollars only.
+  </div>
+  <div class="scroll" style="margin-top:11px"><div id="covTable"></div></div>
+</details>
+
+<!-- ═══ 8 HISTORY ═══ -->
+<details class="panel">
+  <summary><strong>8 &middot; All weeks</strong> &mdash; every week stored, newest first</summary>
+  <div class="scroll" style="margin-top:11px"><div id="histTable"></div></div>
+</details>
+
+<details class="panel">
+  <summary><strong>How this runs each week</strong></summary>
+  <ol class="steps">
+    <li><b>Open workbook</b> and pick the latest <code>.json</code> from the shared Drive folder. Skip it if the browser
+      already remembers &mdash; the badge in section 4 tells you.</li>
+    <li>Pull the three <em>Sales by day</em> exports from Toast and <b>drop all three at once</b>. Same date range on all
+      three, or days will come in partial.</li>
+    <li>Check the preview, then <b>write them in</b>. Anything that overwrites an existing number is reported.</li>
+    <li>Set next week's target in section 6 and <b>Commit &amp; lock</b> it.</li>
+    <li><b>Save workbook</b> and <b>Export for Drive</b>, then put both files in the shared folder. The <code>.json</code>
+      is what the tool reads next week; the <code>.xlsx</code> is the one people read.</li>
+  </ol>
+  <div class="mini" style="margin-top:10px">
+    Nothing is uploaded anywhere &mdash; this page has no server. The browser keeps a working copy so a crash or an
+    accidental refresh doesn't lose the day, but the file in Drive is the record. If the two ever disagree, the file wins.
+  </div>
+</details>
+
+<details class="panel">
+  <summary><strong>Settings</strong> &mdash; fiscal calendar, display</summary>
+  <div style="margin-top:12px">
+    <div class="row">
+      <label class="f">Anchor: period <input type="number" id="aP" min="1" max="13" style="width:64px" onchange="setAnchor()"></label>
+      <label class="f">week <input type="number" id="aW" min="1" max="5" style="width:64px" onchange="setAnchor()"></label>
+      <label class="f">starts Monday <input type="date" id="aD" onchange="setAnchor()"></label>
+      <label class="f">Weeks / period <input type="number" id="aWPP" min="1" max="5" style="width:64px" onchange="setAnchor()"></label>
+      <label class="f">Periods / year <input type="number" id="aPPY" min="1" max="13" style="width:64px" onchange="setAnchor()"></label>
+    </div>
+    <div class="mini" style="margin-top:9px" id="anchorNote"></div>
+    <div class="hr"></div>
+    <div class="row">
+      <label class="f" style="flex-direction:row;align-items:center;gap:7px">
+        <input type="checkbox" id="cents" onchange="state.cents=this.checked;render()"> <span>Show cents</span></label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:7px">
+        <input type="checkbox" id="autosave" onchange="state.autosave=this.checked;persist()">
+        <span>Save the workbook automatically after every import</span></label>
+      <button class="danger sm" onclick="if(confirm('Clear the working copy in this browser? The file in Drive is unaffected.')){localStorage.removeItem(LSK);location.reload()}">Clear working copy</button>
+    </div>
+  </div>
+</details>
+
+<details class="panel">
+  <summary><strong>Notes</strong> &mdash; how this differs from the spreadsheet</summary>
+  <div style="margin-top:11px;font-size:13px;line-height:1.62">
+    <p><strong>PM is imported, not back-solved.</strong> The spreadsheet typed TOTAL NET and derived
+    <code>PM = Total &minus; AM &minus; ATP</code>. Here every bucket arrives from its own export and the total is their
+    sum, so there is nothing left to reconcile.</p>
+    <p><strong>The variance sign is flipped, deliberately.</strong> The spreadsheet computes
+    <code>Projection &minus; Actual</code>, so a negative number reads like a shortfall when it actually means a beat.
+    This uses <code>Actual &minus; Projection</code>: green positive is a beat. Same magnitudes, opposite sign.</p>
+    <p><strong>Committed projections freeze.</strong> In the spreadsheet, P8 WK4 was forecast at $50,000 on one sheet and
+    $51,000 on another, so variance moved with the baseline. Here a commit is a snapshot; later edits are logged as
+    revisions and the headline variance always uses the original.</p>
+    <p><strong>The comparison range is explicit.</strong> The old &ldquo;Difference&rdquo; cell meant Mon&ndash;Thu on one
+    sheet, Mon&ndash;Sat on another and the full week on a third &mdash; identical-looking cells, three meanings. Here
+    it's a labeled control and both sides always use the same days.</p>
+    <p><strong>Partial days stay blank rather than zero.</strong> Toast omits closed days, and the three exports often
+    cover different ranges. A missing bucket is left empty and the day is marked partial, so an unpulled report can't
+    quietly drag a weekly total down.</p>
+    <p><strong>Projections are distributed, not forecast.</strong> You give it one weekly number; it splits that across
+    days and buckets using the trailing mix from complete weeks and shows you the percentages it used. It does not try to
+    predict the total &mdash; on this data a fitted trend would be reading noise, and it would carry the false authority
+    of a computed figure.</p>
+  </div>
+</details>
+
+<div class="mini" style="text-align:center;color:var(--tx3)">
+  Self-contained page, no network requests, no data leaves this browser.
+</div>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const LSK="ckc_atp_tracker_v3";
+const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const BUCKETS=[{k:"am",n:"CKC AM",f:"CKC Lunch",c:"--am"},
+               {k:"pm",n:"CKC PM",f:"CKC Dinner",c:"--pm"},
+               {k:"atp",n:"ATP",   f:"ATP",       c:"--atp"}];
+const Z=()=>[0,0,0,0,0,0,0];
+const FL=()=>[false,false,false,false,false,false,false];
+
+/* ══════════ dates + fiscal periods ══════════ */
+const iso=d=>d.toISOString().slice(0,10);
+function mk(s){const[y,m,d]=s.split("-").map(Number);return new Date(Date.UTC(y,m-1,d))}
+function addD(s,n){const d=mk(s);d.setUTCDate(d.getUTCDate()+n);return iso(d)}
+function monday(s){const d=mk(s);d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return iso(d)}
+const dow=s=>(mk(s).getUTCDay()+6)%7;
+const wkDiff=(a,b)=>Math.round((mk(b)-mk(a))/604800000);
+function label(key){
+  const A=state.anchor,wpp=A.wpp,ppy=A.ppy;
+  const abs=(A.period-1)*wpp+(A.week-1)+wkDiff(A.start,key);
+  const p=Math.floor(abs/wpp),w=((abs%wpp)+wpp)%wpp;
+  return "P"+((((p%ppy)+ppy)%ppy)+1)+" WK"+(w+1);
+}
+function fmtDate(s){const d=mk(s);return(d.getUTCMonth()+1)+"/"+d.getUTCDate()}
+
+/* ══════════ state ══════════ */
+let state=null;
+function blankWeek(key){return{key,
+  proj:{orig:null,cur:{am:Z(),pm:Z(),atp:Z()},lockedAt:null,revs:[]},
+  act:{am:Z(),pm:Z(),atp:Z(),have:{am:FL(),pm:FL(),atp:FL()},
+       ord:{am:Z(),pm:Z(),atp:Z()},gst:{am:Z(),pm:Z(),atp:Z()},src:"manual",at:null}}}
+function wk(key){if(!state.weeks[key])state.weeks[key]=blankWeek(key);return state.weeks[key]}
+function fresh(){return{anchor:{period:8,week:1,start:"2026-07-06",wpp:4,ppy:13},
+  cur:monday(iso(new Date())),through:"full",cents:false,basis:"4",weeks:{}}}
+const tot=(a,i)=>r2((a.am[i]||0)+(a.pm[i]||0)+(a.atp[i]||0));
+const totArr=a=>[0,1,2,3,4,5,6].map(i=>tot(a,i));
+const anyHave=(a,i)=>!!(a.have.am[i]||a.have.pm[i]||a.have.atp[i]);
+const allHave=(a,i)=>!!(a.have.am[i]&&a.have.pm[i]&&a.have.atp[i]);
+const complete=w=>[0,1,2,3,4,5,6].every(i=>allHave(w.act,i));
+const daysComplete=w=>[0,1,2,3,4,5,6].filter(i=>allHave(w.act,i)).length;
+// Rendering touches next week, which would otherwise litter storage and every export with blank weeks.
+const hasAny=w=>[0,1,2,3,4,5,6].some(i=>anyHave(w.act,i))||
+  sum(w.proj.cur.am,0,6)+sum(w.proj.cur.pm,0,6)+sum(w.proj.cur.atp,0,6)>0;
+function pruneEmpty(){Object.keys(state.weeks).forEach(k=>{
+  if(k!==state.cur&&!hasAny(state.weeks[k]))delete state.weeks[k]})}
+// render() touches next week every pass, so pruning alone can't hold. Anything that enumerates or
+// serialises weeks goes through this instead.
+const dataKeys=()=>Object.keys(state.weeks).filter(k=>hasAny(state.weeks[k])).sort();
+function cleanState(){
+  const w={};dataKeys().forEach(k=>w[k]=state.weeks[k]);
+  return Object.assign({},state,{weeks:w});
+}
+const r2=n=>Math.round((+n||0)*100)/100;
+const sum=(a,i0,i1)=>{let t=0;for(let i=i0;i<=i1;i++)t+=(+a[i]||0);return r2(t)};
+function money(n,forceCents){
+  const c=(state&&state.cents)||forceCents,v=+n||0;
+  return(v<0?"-$":"$")+Math.abs(v).toLocaleString("en-US",
+    {minimumFractionDigits:c?2:0,maximumFractionDigits:c?2:0});
+}
+const pct=(n,d)=>d?((n/d)*100).toFixed(1)+"%":"—";
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function say(m){const t=document.getElementById("toast");t.innerHTML=m;t.className="on";
+  clearTimeout(say._t);say._t=setTimeout(()=>t.className="",3000)}
+
+/* ══════════ persistence ══════════ */
+let dirty=false;
+function persist(){pruneEmpty();try{localStorage.setItem(LSK,JSON.stringify(state))}catch(e){}dirty=true;drawDirty()}
+function drawDirty(){
+  const el=document.getElementById("dirtyBar");if(!el)return;
+  el.innerHTML=dirty
+    ?`<div class="alert b"><strong>Not saved to a file yet.</strong> The browser copy is a buffer and won't survive
+       clearing history or moving machines. <button class="pri sm" style="margin-left:8px" onclick="saveFile()">Save workbook now</button></div>`
+    :(state.savedAt?`<div class="alert g"><span class="mini">Saved to file ${esc(state.savedAt)} &mdash; that file is the record.</span></div>`:"");
+}
+function restore(){try{const s=localStorage.getItem(LSK);if(s){const p=JSON.parse(s);if(p&&p.weeks)return p}}catch(e){}return null}
+function dl(name,blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=name;document.body.appendChild(a);a.click();a.remove()}
+function saveFile(auto){
+  state.savedAt=new Date().toISOString().slice(0,16).replace("T"," ");
+  const clean=cleanState(),n=Object.keys(clean.weeks).length;
+  dl("CKC-ATP tracker "+state.cur+".json",new Blob([JSON.stringify(clean,null,1)],{type:"application/json"}));
+  persist();dirty=false;drawDirty();
+  say(auto?`Saved automatically &mdash; all ${n} weeks written to your downloads folder`
+          :`Workbook saved &mdash; all ${n} weeks in one file. Put it in the shared Drive folder.`);
+}
+function loadFile(inp){
+  const f=inp.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!p.weeks)throw 0;
+    state=Object.assign(fresh(),p);persist();render();
+    say("Loaded "+Object.keys(state.weeks).length+" week"+(Object.keys(state.weeks).length===1?"":"s"))}
+    catch(e){alert("That doesn't look like a tracker workbook. Pick the .json saved by this tool.")}};
+  rd.readAsText(f);inp.value="";
+}
+function weekRows(){
+  const rows=[["Week starting","Period week","CKC AM","CKC PM","ATP","TOTAL NET","CKC TOTAL",
+    "Proj AM","Proj PM","Proj ATP","Proj TOTAL","Variance","Complete","Guests","Net per guest"]];
+  dataKeys().reverse().forEach(k=>{
+    const w=state.weeks[k],a=w.act,P=w.proj.orig||w.proj.cur;
+    const pT=sum(P.am,0,6)+sum(P.pm,0,6)+sum(P.atp,0,6),aT=sum(totArr(a),0,6);
+    const g=BUCKETS.reduce((t,b)=>t+sum(a.gst[b.k],0,6),0);
+    // Variance is only emitted for whole weeks. A part-week comparison in a shared file reads as a
+    // miss that isn't real — that is exactly the error the old spreadsheet kept making.
+    rows.push([k,label(k),sum(a.am,0,6),sum(a.pm,0,6),sum(a.atp,0,6),aT,
+      r2(sum(a.am,0,6)+sum(a.pm,0,6)),sum(P.am,0,6),sum(P.pm,0,6),sum(P.atp,0,6),pT,
+      (complete(w)&&pT&&aT)?r2(aT-pT):"",daysComplete(w)+"/7",g||"",g?r2(aT/g):""]);
+  });
+  return rows;
+}
+function exportCsv(){
+  const csv=weekRows().map(r=>r.map(c=>/[",]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(",")).join("\n");
+  dl("CKC-ATP all weeks.csv",new Blob([csv],{type:"text/csv"}));say("CSV exported");
+}
+
+/* ══════════ minimal xlsx writer (store-only zip + OOXML, no dependencies) ══════════ */
+const CRCT=(()=>{const t=new Uint32Array(256);
+  for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c>>>0}return t})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRCT[(c^u8[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(files){
+  const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+  const u16=n=>[n&255,(n>>8)&255],u32=n=>[n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255];
+  // Real DOS timestamp — a zeroed one encodes as 1980-00-00, which some readers reject.
+  const now=new Date();
+  const dTime=((now.getHours()&31)<<11)|((now.getMinutes()&63)<<5)|((now.getSeconds()>>1)&31);
+  const dDate=((Math.max(0,now.getFullYear()-1980)&127)<<9)|(((now.getMonth()+1)&15)<<5)|(now.getDate()&31);
+  files.forEach(f=>{
+    const name=enc.encode(f.name),data=typeof f.data==="string"?enc.encode(f.data):f.data;
+    const crc=crc32(data);
+    const lh=[...u32(0x04034b50),...u16(20),...u16(0x0800),...u16(0),...u16(dTime),...u16(dDate),
+      ...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)];
+    parts.push(new Uint8Array(lh),name,data);
+    cd.push([...u32(0x02014b50),...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(dTime),...u16(dDate),
+      ...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),
+      ...u16(0),...u16(0),...u32(0),...u32(off),...Array.from(name)]);
+    off+=lh.length+name.length+data.length;
+  });
+  const cdBytes=cd.flat(),cdArr=new Uint8Array(cdBytes);
+  const eocd=new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),
+    ...u16(files.length),...u32(cdArr.length),...u32(off),...u16(0)]);
+  let len=0;parts.forEach(p=>len+=p.length);len+=cdArr.length+eocd.length;
+  const out=new Uint8Array(len);let p=0;
+  parts.forEach(x=>{out.set(x,p);p+=x.length});out.set(cdArr,p);p+=cdArr.length;out.set(eocd,p);
+  return out;
+}
+const xe=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+const colName=i=>{let s="",n=i+1;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
+/* style ids: 1 hdr, 2 rowlabel, 3 money, 4 money-bold, 5 title, 6 text, 7 money-cents, 8 pctd */
+function cell(r,ci,v,s){
+  const ref=colName(ci)+r;
+  if(v===null||v===undefined||v==="")return s?`<c r="${ref}" s="${s}"/>`:"";
+  if(typeof v==="number"&&isFinite(v))return `<c r="${ref}"${s?` s="${s}"`:""}><v>${v}</v></c>`;
+  return `<c r="${ref}"${s?` s="${s}"`:""} t="inlineStr"><is><t>${xe(v)}</t></is></c>`;
+}
+function sheetXml(rows,widths){
+  let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`;
+  if(widths)x+=`<cols>`+widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")+`</cols>`;
+  x+=`<sheetData>`;
+  rows.forEach((row,ri)=>{
+    if(!row||!row.length){return}
+    const cells=row.map((c,ci)=>c==null?"":cell(ri+1,ci,c.v!==undefined?c.v:c,c.s)).join("");
+    if(cells)x+=`<row r="${ri+1}">${cells}</row>`;
+  });
+  return x+`</sheetData></worksheet>`;
+}
+const STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="3"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0"/>
+<numFmt numFmtId="165" formatCode="&quot;$&quot;#,##0.00"/>
+<numFmt numFmtId="166" formatCode="0.0%"/></numFmts>
+<fonts count="3">
+<font><sz val="11"/><color theme="1"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>
+<fills count="4">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF2F5597"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border/>
+<border><left style="thin"><color rgb="FFB8C4D4"/></left><right style="thin"><color rgb="FFB8C4D4"/></right>
+<top style="thin"><color rgb="FFB8C4D4"/></top><bottom style="thin"><color rgb="FFB8C4D4"/></bottom></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="9">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+function xlsx(sheets){
+  const files=[];
+  const safe=n=>n.replace(/[\[\]\*\/\\\?:]/g,"-").slice(0,31);
+  const names=[];sheets.forEach(s=>{let n=safe(s.name),i=2;while(names.includes(n)){n=safe(s.name).slice(0,28)+"("+i+++")"}names.push(n)});
+  files.push({name:"[Content_Types].xml",data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
+</Types>`});
+  files.push({name:"_rels/.rels",data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`});
+  files.push({name:"xl/workbook.xml",data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${names.map((n,i)=>`<sheet name="${xe(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")}</sheets></workbook>`});
+  files.push({name:"xl/_rels/workbook.xml.rels",data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}
+<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`});
+  files.push({name:"xl/styles.xml",data:STYLES});
+  sheets.forEach((s,i)=>files.push({name:`xl/worksheets/sheet${i+1}.xml`,data:sheetXml(s.rows,s.widths)}));
+  return zipStore(files);
+}
+function weekSheetRows(key){
+  const w=wk(key),a=w.act,P=w.proj.orig||w.proj.cur,rows=[];
+  const H=v=>({v,s:1}),L=v=>({v,s:2}),M=v=>({v,s:3}),MB=v=>({v,s:4}),T=v=>({v,s:5}),X=v=>({v,s:6});
+  const hdr=t=>[T(t),...DAYS.map((d,i)=>H(d+" "+fmtDate(addD(key,i)))),H("TOTAL")];
+  rows.push(hdr(label(key)+" ACTUAL"));
+  BUCKETS.forEach(b=>rows.push([L(b.n),...a[b.k].map((v,i)=>a.have[b.k][i]?M(v):X("")),MB(sum(a[b.k],0,6))]));
+  rows.push([L("TOTAL NET"),...totArr(a).map((v,i)=>anyHave(a,i)?MB(v):X("")),MB(sum(totArr(a),0,6))]);
+  rows.push([L("CKC TOTAL"),...a.am.map((v,i)=>anyHave(a,i)?M(r2(v+a.pm[i])):X("")),
+             MB(r2(sum(a.am,0,6)+sum(a.pm,0,6)))]);
+  rows.push([]);
+  rows.push(hdr(label(key)+" PROJECTION"+(w.proj.lockedAt?" (committed)":" (not committed)")));
+  BUCKETS.forEach(b=>rows.push([L(b.n),...P[b.k].map(v=>M(v)),MB(sum(P[b.k],0,6))]));
+  const pd=P.am.map((v,i)=>r2(v+P.pm[i]+P.atp[i]));
+  rows.push([L("TOTAL NET"),...pd.map(v=>MB(v)),MB(sum(pd,0,6))]);
+  rows.push([]);
+  const dc=daysComplete(w),whole=dc===7;
+  rows.push(hdr("VARIANCE  (actual less projection)"+(whole?"":`  —  INCOMPLETE WEEK, ${dc} of 7 days`)));
+  if(!whole)rows.push([X("Weekly variance withheld: "+(7-dc)+" day"+(dc===6?"":"s")+
+    " missing at least one export. A part-week total compared to a full-week projection reads as a miss that isn't real.")]);
+  // Per-day variance only where all three buckets landed; weekly total only for whole weeks.
+  rows.push([L("Daily"),...totArr(a).map((v,i)=>allHave(a,i)?M(r2(v-pd[i])):X("")),
+             whole?MB(r2(sum(totArr(a),0,6)-sum(pd,0,6))):X("")]);
+  BUCKETS.forEach(b=>rows.push([L(b.n),...a[b.k].map((v,i)=>allHave(a,i)?M(r2(v-P[b.k][i])):X("")),
+             whole?MB(r2(sum(a[b.k],0,6)-sum(P[b.k],0,6))):X("")]));
+  const g=[0,1,2,3,4,5,6].map(i=>BUCKETS.reduce((t,b)=>t+(a.gst[b.k][i]||0),0));
+  if(sum(g,0,6)){
+    rows.push([]);
+    rows.push(hdr("GUESTS"));
+    rows.push([L("Guests"),...g.map(v=>v?X(v):X("")),MB(sum(g,0,6))]);
+    rows.push([L("Net per guest"),...g.map((v,i)=>v?({v:r2(tot(a,i)/v),s:7}):X("")),
+               {v:r2(sum(totArr(a),0,6)/sum(g,0,6)),s:7}]);
+  }
+  return rows;
+}
+function exportXlsx(){
+  const keys=dataKeys().reverse();
+  if(!keys.length){alert("No weeks to export yet.");return}
+  const flat=weekRows();
+  const sheets=[{name:"All weeks",widths:[14,12,11,11,11,12,12,11,11,11,12,11,10,9,12],
+    rows:[flat[0].map(v=>({v,s:1})),...flat.slice(1).map(r=>r.map((v,i)=>
+      i<2?({v,s:6}):(typeof v==="number"?({v,s:i===14?7:3}):({v,s:6}))))]}];
+  keys.slice(0,26).forEach(k=>sheets.push({name:label(k)+" "+fmtDate(k).replace("/","-"),
+    widths:[26,12,12,12,12,12,12,12,13],rows:weekSheetRows(k)}));
+  dl("CKC-ATP Weekly Sales "+state.cur+".xlsx",
+     new Blob([xlsx(sheets)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  say("Excel file exported &mdash; "+sheets.length+" sheets. Drop it in the shared Drive folder.");
+}
+
+/* ══════════ CSV parsing ══════════ */
+function parseCSV(text){
+  text=text.replace(/^﻿/,"").replace(/\r\n?/g,"\n");
+  const l0=text.split("\n")[0];
+  const delim=l0.split("\t").length>l0.split(",").length?"\t":",";
+  const rows=[];let f="",row=[],q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===delim){row.push(f);f=""}
+    else if(c==="\n"){row.push(f);rows.push(row);row=[];f=""}
+    else f+=c}
+  row.push(f);rows.push(row);
+  let hi=0,best=0;
+  for(let i=0;i<Math.min(rows.length,12);i++){
+    const n=rows[i].filter(x=>x.trim()!=="").length;if(n>best){best=n;hi=i}}
+  const headers=rows[hi].map(h=>h.trim());
+  const data=rows.slice(hi+1).filter(r=>r.some(c=>c.trim()!==""))
+    .map(r=>{const o={};headers.forEach((h,i)=>o[h]=(r[i]||"").trim());return o});
+  return {headers,data};
+}
+function num(v){
+  if(v==null)return null;let s=String(v).trim();if(!s)return null;
+  const neg=/^\(.*\)$/.test(s)||/^-/.test(s);
+  s=s.replace(/[()$,\s]/g,"").replace(/^-/,"");
+  if(s===""||isNaN(s))return null;
+  return(neg?-1:1)*parseFloat(s);
+}
+const p2=n=>String(+n).padStart(2,"0");
+function parseDate(v){
+  if(v==null)return null;const s=String(v).trim();if(!s)return null;
+  let m=s.match(/^(\d{4})(\d{2})(\d{2})$/);                 if(m)return`${m[1]}-${m[2]}-${m[3]}`;
+  m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);                if(m)return`${m[1]}-${p2(m[2])}-${p2(m[3])}`;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(m){let y=+m[3];if(y<100)y+=2000;return`${y}-${p2(m[1])}-${p2(m[2])}`}
+  const d=new Date(s);
+  if(!isNaN(d))return iso(new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())));
+  return null;
+}
+function pickCol(headers,hints,rows){
+  let best=null,bs=-1;
+  headers.forEach(h=>{const lh=h.toLowerCase().replace(/[^a-z0-9]/g,"");
+    hints.forEach((hint,i)=>{const lhint=hint.replace(/[^a-z0-9]/g,"");let s=-1;
+      if(lh===lhint)s=100-i;else if(lh.startsWith(lhint))s=70-i;else if(lh.includes(lhint))s=50-i;
+      if(s>bs){bs=s;best=h}})});
+  if(bs>0)return best;
+  if(rows&&rows.length)for(const h of headers){const v=rows[0][h];
+    if(hints[0]==="date"?parseDate(v):num(v)!=null)return h}
+  return "";
+}
+function guessBucketByName(name){
+  const n=name.toLowerCase().replace(/[_\-.]+/g," ");
+  if(/\batp\b|pond/.test(n))return"atp";
+  if(/lunch|brunch|\bam\b|daypart ?1/.test(n))return"am";
+  if(/dinner|\bpm\b|night|evening/.test(n))return"pm";
+  return null;                       // no keyword — never silently pick one
+}
+// Toast will happily hand you a file called "Sales by day.csv". Rather than defaulting it somewhere
+// plausible-looking, compare its per-open-day level against what each bucket has historically run.
+function guessBucketByLevel(parsed){
+  const ds=Object.keys(parsed).filter(d=>parsed[d].net>0);
+  if(ds.length<5)return null;
+  const avg=ds.reduce((s,d)=>s+parsed[d].net,0)/ds.length;
+  let best=null,bd=Infinity,second=Infinity;
+  BUCKETS.forEach(b=>{
+    let s=0,n=0;
+    dataKeys().forEach(k=>{const a=state.weeks[k].act;
+      for(let i=0;i<7;i++)if(a.have[b.k][i]&&a[b.k][i]>0){s+=a[b.k][i];n++}});
+    if(n<14)return;
+    const d=Math.abs(Math.log(avg/(s/n)));
+    if(d<bd){second=bd;bd=d;best=b.k}else if(d<second)second=d;
+  });
+  // only trust it if the winner is clearly closer than the runner-up
+  return (best&&bd<0.35&&second>bd*2.5)?{k:best,avg,dist:bd}:null;
+}
+function guessBucket(name){return guessBucketByName(name)||"pm"}
+
+/* ══════════ staging ══════════ */
+let STAGE=[];
+function handleFiles(files){
+  const list=[...files];if(!list.length)return;let done=0;
+  list.forEach(f=>{const rd=new FileReader();
+    rd.onload=()=>{
+      const p=parseCSV(rd.result);
+      const map={date:pickCol(p.headers,["date","yyyymmdd","business date","day"],p.data),
+                 net :pickCol(p.headers,["net sales","netsales","net","sales","amount"],p.data),
+                 ord :pickCol(p.headers,["total orders","orders","checks","order count"]),
+                 gst :pickCol(p.headers,["total guests","guests","covers"])};
+      const byName=guessBucketByName(f.name);
+      const e={name:f.name,bucket:byName||"pm",headers:p.headers,rows:p.data,map,
+               how:byName?"name":"none"};
+      reparse(e);
+      if(!byName){                       // filename told us nothing — try the sales level
+        const lvl=guessBucketByLevel(e.parsed);
+        if(lvl){e.bucket=lvl.k;e.how="level";e.lvl=lvl}
+      }
+      STAGE=STAGE.filter(x=>x.name!==e.name);STAGE.push(e);
+      if(++done===list.length){drawStage();previewImport()}
+    };
+    rd.readAsText(f)});
+}
+function reparse(e){
+  const parsed={};let bad=0;
+  e.rows.forEach(r=>{
+    const d=parseDate(r[e.map.date]),n=num(r[e.map.net]);
+    if(!d||n==null){bad++;return}
+    const o=parsed[d]||(parsed[d]={net:0,ord:0,gst:0});
+    o.net=r2(o.net+n);
+    o.ord+=e.map.ord?(num(r[e.map.ord])||0):0;
+    o.gst+=e.map.gst?(num(r[e.map.gst])||0):0;
+  });
+  const ks=Object.keys(parsed).sort();
+  e.parsed=parsed;e.bad=bad;e.min=ks[0]||null;e.max=ks[ks.length-1]||null;
+}
+function setBucket(i,v){STAGE[i].bucket=v;STAGE[i].how="manual";drawStage();previewImport()}
+function setCol(i,k,v){STAGE[i].map[k]=v;reparse(STAGE[i]);drawStage();previewImport()}
+function dropStage(i){STAGE.splice(i,1);drawStage();previewImport()}
+function drawStage(){
+  const box=document.getElementById("staged");
+  if(!STAGE.length){box.innerHTML="";return}
+  box.innerHTML=`<div class="hr"></div>`+STAGE.map((e,i)=>{
+    const b=BUCKETS.find(x=>x.k===e.bucket);
+    return `<div class="fcard">
+      <span class="swatch" style="background:var(${b.c})"></span>
+      <span class="nm">${esc(e.name)}</span>
+      <select onchange="setBucket(${i},this.value)">
+        ${BUCKETS.map(x=>`<option value="${x.k}" ${x.k===e.bucket?"selected":""}>${x.f} &rarr; ${x.n}</option>`).join("")}
+      </select>
+      <span class="mini">${e.min?`${fmtDate(e.min)}–${fmtDate(e.max)} · ${Object.keys(e.parsed).length} days`:`<span class="bad">no readable rows</span>`}${e.bad?` · <span class="warn">${e.bad} skipped</span>`:""}</span>
+      ${e.how==="level"?`<span class="badge open" style="flex-basis:100%">Filename gave no clue &mdash; matched to <strong>${b.n}</strong> by sales level (${money(e.lvl.avg)}/open day). Confirm it.</span>`
+       :e.how==="none"?`<span class="badge open" style="flex-basis:100%"><strong>Bucket unknown.</strong> Nothing in the filename identifies this, and the sales level doesn't clearly match one bucket. Set it yourself before writing it in.</span>`:""}
+      <details style="flex-basis:100%"><summary>columns</summary>
+        <div class="row" style="margin-top:6px">
+          ${[["date","Date"],["net","Net sales"],["ord","Orders"],["gst","Guests"]].map(([k,lb])=>
+            `<label class="f">${lb}<select onchange="setCol(${i},'${k}',this.value)">
+              <option value="">— none —</option>
+              ${e.headers.map(h=>`<option ${e.map[k]===h?"selected":""}>${esc(h)}</option>`).join("")}
+            </select></label>`).join("")}
+        </div></details>
+      <button class="sm danger" onclick="dropStage(${i})">remove</button>
+    </div>`}).join("");
+}
+function buildImport(){
+  const dates=new Set(),warn=[],byB={};
+  STAGE.forEach(e=>Object.keys(e.parsed).forEach(d=>dates.add(d)));
+  BUCKETS.forEach(b=>byB[b.k]=STAGE.filter(e=>e.bucket===b.k));
+  BUCKETS.forEach(b=>{
+    if(!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
+    if(byB[b.k].length>1)warn.push(`${byB[b.k].length} files are mapped to <strong>${b.n}</strong>; their days will be merged.`);
+  });
+  const rows=[...dates].sort().map(d=>{
+    const o={d,cells:{}};
+    BUCKETS.forEach(b=>{
+      const fs=byB[b.k];
+      if(!fs.length){o.cells[b.k]={st:"nofile"};return}
+      const hit=fs.find(e=>e.parsed[d]);
+      if(hit){o.cells[b.k]={st:"val",...hit.parsed[d]};return}
+      o.cells[b.k]=fs.some(e=>e.min&&d>=e.min&&d<=e.max)?{st:"closed",net:0,ord:0,gst:0}:{st:"outside"};
+    });
+    o.total=BUCKETS.reduce((t,b)=>t+(o.cells[b.k].net||0),0);
+    o.full=BUCKETS.every(b=>o.cells[b.k].st==="val"||o.cells[b.k].st==="closed");
+    return o;
+  });
+  const rng=BUCKETS.filter(b=>byB[b.k].length).map(b=>({b,
+    mn:byB[b.k].map(e=>e.min).filter(Boolean).sort()[0],
+    mx:byB[b.k].map(e=>e.max).filter(Boolean).sort().pop()}));
+  if(rng.length>1&&new Set(rng.map(r=>r.mn+r.mx)).size>1)
+    warn.push("The exports cover different date ranges — "+
+      rng.map(r=>`<strong>${r.b.n}</strong> ${fmtDate(r.mn)}–${fmtDate(r.mx)}`).join(", ")+
+      ". Days missing a bucket stay blank rather than zero, so a report you haven't pulled can't drag a weekly total down.");
+  return{rows,warn};
+}
+function previewImport(){
+  const box=document.getElementById("importPreview");
+  if(!STAGE.length){box.innerHTML="";return}
+  const{rows,warn}=buildImport();
+  let h=warn.map(w=>`<div class="alert i">${w}</div>`).join("");
+  if(!rows.length){box.innerHTML=h+`<div class="alert b">No usable rows. Check the date and net-sales columns.</div>`;return}
+  const weeks=[...new Set(rows.map(r=>monday(r.d)))].sort();
+  const big=rows.length>21;
+  h+=`<div class="hr"></div><h2>Preview — ${rows.length} days across ${weeks.length} week${weeks.length===1?"":"s"}`+
+     ` (${label(weeks[0])}${weeks.length>1?" – "+label(weeks[weeks.length-1]):""})</h2>`;
+  if(big){
+    h+=`<div class="mini" style="margin-bottom:8px">Showing weekly totals — ${rows.length} days is a backfill, not a weekly drop.</div>`;
+    h+=`<table><tr><th class="lbl">Week</th>`+BUCKETS.map(b=>
+        `<th><span class="swatch" style="background:var(${b.c})"></span>${b.n}</th>`).join("")+
+        `<th class="total-col">TOTAL NET</th><th>Days</th></tr>`;
+    weeks.forEach(wkey=>{
+      const dr=rows.filter(r=>monday(r.d)===wkey);
+      const t={};BUCKETS.forEach(b=>t[b.k]=r2(dr.reduce((s,r)=>s+(r.cells[b.k].net||0),0)));
+      const full=dr.filter(r=>r.full).length;
+      h+=`<tr><td class="lbl">${label(wkey)} <span class="mini dim">${fmtDate(wkey)}</span></td>`+
+         BUCKETS.map(b=>`<td class="num">${money(t[b.k])}</td>`).join("")+
+         `<td class="num total-col">${money(BUCKETS.reduce((s,b)=>s+t[b.k],0))}</td>`+
+         `<td class="mini ${full===7?"dim":"warn"}">${full}/7</td></tr>`});
+    h+=`</table>`;
+  }else{
+    h+=`<table><tr><th class="lbl">Date</th><th>Week</th>`+BUCKETS.map(b=>
+        `<th><span class="swatch" style="background:var(${b.c})"></span>${b.n}</th>`).join("")+
+        `<th class="total-col">TOTAL NET</th><th></th></tr>`;
+    const cl=c=>c.st==="val"?`<td class="num">${money(c.net)}</td>`
+      :c.st==="closed"?`<td class="dim mini">closed</td>`:`<td class="dim">—</td>`;
+    rows.forEach(r=>h+=`<tr><td class="lbl">${DAYS[dow(r.d)]} ${fmtDate(r.d)}</td>
+      <td class="mini dim">${label(monday(r.d))}</td>`+BUCKETS.map(b=>cl(r.cells[b.k])).join("")+
+      `<td class="num total-col">${money(r.total)}</td>
+       <td class="mini ${r.full?"dim":"warn"}">${r.full?"complete":"partial"}</td></tr>`);
+    h+=`</table>`;
+  }
+  h+=`<div class="row" style="margin-top:11px">
+      <button class="pri" onclick="applyImport()">Write in ${rows.length} day${rows.length===1?"":"s"}</button>
+      <button onclick="STAGE=[];drawStage();previewImport()">Clear</button>
+      <span class="mini">Only the buckets shown are touched. Projections are never modified.</span></div>`;
+  box.innerHTML=h;
+}
+function applyImport(){
+  if(!STAGE.length)return;
+  const{rows}=buildImport();if(!rows.length)return;
+  const touched=new Set(),changes=[];
+  rows.forEach(r=>{
+    const k=monday(r.d),i=dow(r.d),a=wk(k).act;
+    BUCKETS.forEach(b=>{
+      const c=r.cells[b.k];
+      if(c.st!=="val"&&c.st!=="closed")return;
+      const nv=r2(c.net||0);
+      if(a.have[b.k][i]&&Math.abs(a[b.k][i]-nv)>0.005)
+        changes.push({d:r.d,b:b.n,old:a[b.k][i],nv,delta:r2(nv-a[b.k][i])});
+      a[b.k][i]=nv;a.have[b.k][i]=true;
+      a.ord[b.k][i]=c.ord||0;a.gst[b.k][i]=c.gst||0;
+    });
+    a.src="csv";a.at=new Date().toISOString().slice(0,16).replace("T"," ");
+    touched.add(k);
+  });
+  const ks=[...touched].sort();state.cur=ks[ks.length-1];state.through="full";
+  state.lastChanges=changes;
+  STAGE=[];drawStage();document.getElementById("importPreview").innerHTML="";
+  persist();render();
+  say(`Wrote ${rows.length} days into ${ks.length} week${ks.length===1?"":"s"}`+
+      (changes.length?` · <span class="warn">${changes.length} existing value${changes.length===1?"":"s"} changed</span>`:""));
+  document.getElementById("weekSel").scrollIntoView({behavior:"smooth",block:"center"});
+  // Auto-save so keeping the history never depends on remembering to click anything.
+  if(state.autosave!==false)setTimeout(()=>saveFile(true),700);
+}
+
+/* ══════════ grids ══════════ */
+const headRow=key=>`<tr><th class="lbl">${label(key)}</th>`+
+  DAYS.map((d,i)=>`<th>${d} ${fmtDate(addD(key,i))}</th>`).join("")+`<th class="total-col">TOTAL</th></tr>`;
+function inRow(name,arr,cb,sw,haveArr){
+  return `<tr><td class="lbl">${sw?`<span class="swatch" style="background:var(${sw})"></span>`:""}${name}</td>`+
+    arr.map((v,i)=>{const blank=haveArr&&!haveArr[i];
+      return `<td><input class="cellin" type="text" value="${blank?"":(v?r2(v):"0")}"
+        placeholder="${blank?"—":""}" onchange="${cb}(${i},this.value)" onfocus="this.select()"></td>`}).join("")+
+    `<td class="num total-col">${money(sum(arr,0,6))}</td></tr>`;
+}
+const calcRow=(name,arr,cls,blanks)=>`<tr class="${cls||""}"><td class="lbl">${name}</td>`+
+  arr.map((v,i)=>`<td class="num${blanks&&!blanks[i]?" dim":""}">${blanks&&!blanks[i]?"—":money(v)}</td>`).join("")+
+  `<td class="num total-col">${money(sum(arr,0,6))}</td></tr>`;
+
+function drawActuals(){
+  const key=state.cur,a=wk(key).act,filled=[0,1,2,3,4,5,6].map(i=>anyHave(a,i));
+  let h=`<table>${headRow(key)}`;
+  BUCKETS.forEach(b=>h+=inRow(b.n,a[b.k],"eAct_"+b.k,b.c,a.have[b.k]));
+  h+=calcRow("TOTAL NET",totArr(a),"tot",filled);
+  h+=calcRow("CKC TOTAL",a.am.map((v,i)=>r2(v+a.pm[i])),"",filled);
+  h+=`</table>`;
+  document.getElementById("actTable").innerHTML=h;
+  document.getElementById("actSrc").innerHTML=
+    a.src==="csv"?`<span class="badge csv">from Toast exports · ${esc(a.at||"")}</span>`
+    :`<span class="badge open">manual</span>`;
+}
+function eAct(b,i,v){
+  const a=wk(state.cur).act,n=num(v);
+  if(n==null){a[b][i]=0;a.have[b][i]=false}else{a[b][i]=r2(n);a.have[b][i]=true}
+  a.src="manual";persist();render();
+}
+const eAct_am=(i,v)=>eAct("am",i,v),eAct_pm=(i,v)=>eAct("pm",i,v),eAct_atp=(i,v)=>eAct("atp",i,v);
+
+function drawProj(){
+  const key=state.cur,P=wk(key).proj,locked=!!P.lockedAt;
+  let h=`<table>${headRow(key)}`;
+  BUCKETS.forEach(b=>h+=inRow(b.n,P.cur[b.k],"eP_"+b.k,b.c));
+  h+=calcRow("TOTAL NET",P.cur.am.map((v,i)=>r2(v+P.cur.pm[i]+P.cur.atp[i])),"tot");
+  if(P.orig){
+    const oT=P.orig.am.map((v,i)=>r2(v+P.orig.pm[i]+P.orig.atp[i]));
+    const cT=P.cur.am.map((v,i)=>r2(v+P.cur.pm[i]+P.cur.atp[i]));
+    if(oT.some((v,i)=>Math.abs(v-cT[i])>0.005)){
+      h+=calcRow("Original committed",oT);
+      h+=`<tr><td class="lbl warn">Revised by</td>`+oT.map((v,i)=>{const d=r2(cT[i]-v);
+        return`<td class="num ${d?"warn":"dim"}">${d?money(d):"—"}</td>`}).join("")+
+        `<td class="num total-col warn">${money(sum(cT,0,6)-sum(oT,0,6))}</td></tr>`;
+    }
+  }
+  h+=`</table>`;
+  document.getElementById("projTable").innerHTML=h;
+  document.getElementById("projCtl").innerHTML=locked
+    ?`<span class="badge lock">committed · ${esc(P.lockedAt)}</span>`
+    :`<button class="pri sm" onclick="commitProj()">Commit &amp; lock</button>`;
+  document.getElementById("projNote").innerHTML=locked
+    ?`Committed. Variance always measures against the <strong>original</strong> committed figures.`
+    :`<span class="warn">Not committed.</span> Commit before the week starts — that snapshot becomes the baseline.`;
+  document.getElementById("revLog").innerHTML=P.revs&&P.revs.length
+    ?`<div class="hr"></div><div class="mini"><strong>Revision log</strong><br>`+
+      P.revs.map(r=>`· ${esc(r.at)} — ${esc(r.note||"edited after commit")}`).join("<br>")+`</div>`:"";
+}
+function eP(f,i,v){
+  const P=wk(state.cur).proj;P.cur[f][i]=r2(num(v)||0);
+  if(P.lockedAt)P.revs.push({at:new Date().toISOString().slice(0,16).replace("T"," "),
+    note:`${f.toUpperCase()} ${DAYS[i]} set to ${money(P.cur[f][i])}`});
+  persist();render();
+}
+const eP_am=(i,v)=>eP("am",i,v),eP_pm=(i,v)=>eP("pm",i,v),eP_atp=(i,v)=>eP("atp",i,v);
+function commitProj(){
+  const P=wk(state.cur).proj;
+  P.orig={am:P.cur.am.slice(),pm:P.cur.pm.slice(),atp:P.cur.atp.slice()};
+  P.lockedAt=new Date().toISOString().slice(0,16).replace("T"," ");P.revs=[];
+  persist();render();say("Projection committed and locked");
+}
+
+/* ══════════ next week + distribution ══════════ */
+function completeWeeksBefore(key,n){
+  return dataKeys().filter(k=>k<key&&complete(state.weeks[k])).slice(-n);
+}
+function mixFrom(keys){
+  // day share of week, and bucket share within each day — averaged across the given weeks
+  const dayS=Z(),bS=[0,1,2,3,4,5,6].map(()=>({am:0,pm:0,atp:0}));
+  let nD=0,nB=Z();
+  keys.forEach(k=>{
+    const a=state.weeks[k].act,t=totArr(a),wt=sum(t,0,6);
+    if(!wt)return;nD++;
+    for(let i=0;i<7;i++){
+      dayS[i]+=t[i]/wt;
+      if(t[i]>0){nB[i]++;BUCKETS.forEach(b=>bS[i][b.k]+=a[b.k][i]/t[i])}
+    }
+  });
+  if(!nD)return null;
+  const ds=dayS.map(v=>v/nD),dsum=ds.reduce((x,y)=>x+y,0);
+  const dayShare=ds.map(v=>v/dsum);
+  const bucketShare=bS.map((o,i)=>{
+    if(!nB[i])return{am:.18,pm:.6,atp:.22};
+    const s={am:o.am/nB[i],pm:o.pm/nB[i],atp:o.atp/nB[i]},t2=s.am+s.pm+s.atp;
+    return{am:s.am/t2,pm:s.pm/t2,atp:s.atp/t2};
+  });
+  // Service-pattern guard: if a weekday was dark in some of the basis weeks and open in others,
+  // averaging them understates that day. ATP adding Tuesday service in Feb 2026 is exactly this.
+  // Only a genuine split counts. A one-off dark day (a POS gap, a holiday) is not a pattern change,
+  // so both sides must be at least 3 weeks and 15% of the basis before this fires.
+  const material=(d,l)=>{const m=Math.min(d,l);return m>=3&&m/keys.length>=0.15};
+  const shifts=[];
+  for(let i=0;i<7;i++){
+    let dark=0,lit=0;
+    keys.forEach(k=>{tot(state.weeks[k].act,i)>0?lit++:dark++});
+    if(dark&&lit&&material(dark,lit)){shifts.push({i,dark,lit});continue}
+    if(dark&&lit)continue;
+    // whole day consistent — check each bucket, where one venue adding a service day shows up
+    BUCKETS.forEach(b=>{let d2=0,l2=0;
+      keys.forEach(k=>{state.weeks[k].act[b.k][i]>0?l2++:d2++});
+      if(d2&&l2&&material(d2,l2))shifts.push({i,dark:d2,lit:l2,b:b.n})});
+  }
+  return{dayShare,bucketShare,n:nD,keys,shifts};
+}
+function basisKeys(key){
+  const b=state.basis;
+  if(b==="yoy"){const k=addD(key,-364);return state.weeks[k]&&complete(state.weeks[k])?[k]:[]}
+  return completeWeeksBefore(key,+b);
+}
+function drawBasis(){
+  const key=addD(state.cur,7),sel=document.getElementById("basis");
+  const opts=[["4","Last 4 complete weeks"],["8","Last 8 complete weeks"],["13","Last 13 complete weeks"],
+              ["yoy","Same week last year"]];
+  sel.innerHTML=opts.map(([v,t])=>{
+    const n=(v==="yoy")?(state.weeks[addD(key,-364)]&&complete(state.weeks[addD(key,-364)])?1:0)
+                       :completeWeeksBefore(key,+v).length;
+    return`<option value="${v}" ${state.basis===v?"selected":""} ${n?"":"disabled"}>${t}${n?"":" — none available"}</option>`
+  }).join("");
+  sel.value=state.basis;
+  sel.onchange=()=>{state.basis=sel.value;persist();render()};
+  const ks=basisKeys(key);
+  document.getElementById("basisNote").innerHTML=ks.length
+    ?`Using ${ks.map(label).join(", ")}. Enter a weekly target and it splits by the day mix those weeks actually ran.`
+    :`<span class="warn">No complete weeks to shape from yet.</span> Back-fill history from Toast, or type the days in directly.`;
+}
+function distribute(){
+  const key=addD(state.cur,7),t=num(document.getElementById("tgt").value);
+  if(!t||t<=0){alert("Enter a weekly net target first, e.g. 52000");return}
+  const ks=basisKeys(key),m=mixFrom(ks);
+  if(!m){alert("No complete weeks available to shape the distribution. Back-fill history first.");return}
+  const P=wk(key).proj;
+  if(P.lockedAt&&!confirm("Next week is already committed. Overwrite the draft?"))return;
+  const out={am:Z(),pm:Z(),atp:Z()};
+  for(let i=0;i<7;i++){
+    const dayTot=t*m.dayShare[i];
+    BUCKETS.forEach(b=>out[b.k][i]=Math.round(dayTot*m.bucketShare[i][b.k]/50)*50);
+  }
+  // largest-remainder nudge so the rounded week lands on the target
+  let diff=Math.round((t-(sum(out.am,0,6)+sum(out.pm,0,6)+sum(out.atp,0,6)))/50)*50;
+  const order=[...Array(7).keys()].sort((x,y)=>m.dayShare[y]-m.dayShare[x]);
+  let gi=0;
+  while(diff!==0&&gi<200){
+    const i=order[gi%7],b=out.pm[i]>0?"pm":(out.am[i]>0?"am":"atp");
+    const step=diff>0?50:-50;
+    if(out[b][i]+step>=0){out[b][i]+=step;diff-=step}
+    gi++;
+  }
+  P.cur=out;state.lastMix=m;persist();render();
+  say("Distributed "+money(t)+" across "+label(key)+" from "+m.n+" week"+(m.n===1?"":"s")+" of history");
+}
+function drawNext(){
+  const key=addD(state.cur,7),P=wk(key).proj;
+  document.getElementById("nextLbl").textContent=label(key)+"  ("+fmtDate(key)+"–"+fmtDate(addD(key,6))+")";
+  let h=`<table>${headRow(key)}`;
+  BUCKETS.forEach(b=>h+=inRow(b.n,P.cur[b.k],"eN_"+b.k,b.c));
+  h+=calcRow("TOTAL NET",P.cur.am.map((v,i)=>r2(v+P.cur.pm[i]+P.cur.atp[i])),"tot");
+  h+=`</table>`;
+  document.getElementById("nextTable").innerHTML=h;
+  const empty=sum(P.cur.am,0,6)+sum(P.cur.pm,0,6)+sum(P.cur.atp,0,6)===0;
+  document.getElementById("nextNote").innerHTML=P.lockedAt
+    ?`<span class="badge lock">committed · ${esc(P.lockedAt)}</span>`
+    :empty?`<span class="warn">Empty.</span> Set a target below, or copy from this week, then commit.`
+          :`<span class="warn">Drafted, not committed.</span>`;
+  drawBasis();
+  const m=state.lastMix;
+  document.getElementById("mixNote").innerHTML=m
+    ?`<div class="hr"></div><div class="mini"><strong>Day mix used</strong> (from ${m.keys.map(label).join(", ")}):<br>`+
+      DAYS.map((d,i)=>`${d} ${(m.dayShare[i]*100).toFixed(1)}%`).join(" · ")+
+      `<br><span class="dim">Within each day, split AM / PM / ATP at the same trailing ratio. Rounded to the nearest $50.</span></div>`+
+      ((m.shifts&&m.shifts.length)?`<div class="alert" style="margin-top:8px">
+        <strong>Service pattern changed inside this basis.</strong> `+
+        m.shifts.map(s=>`${DAYS[s.i]}${s.b?" "+s.b:""} was dark in ${s.dark} of ${m.keys.length} weeks and open in ${s.lit}`).join("; ")+
+        `. Averaging across that understates the day. Shorten the basis to weeks that ran the current schedule, or set those days by hand.</div>`:"")
+    :"";
+}
+function eN(f,i,v){wk(addD(state.cur,7)).proj.cur[f][i]=r2(num(v)||0);persist();render()}
+const eN_am=(i,v)=>eN("am",i,v),eN_pm=(i,v)=>eN("pm",i,v),eN_atp=(i,v)=>eN("atp",i,v);
+function seedNext(kind){
+  const src=wk(state.cur),dst=wk(addD(state.cur,7)).proj;
+  if(dst.lockedAt&&!confirm("Next week is already committed. Overwrite the draft?"))return;
+  const s=kind==="proj"?src.proj.cur:src.act;
+  dst.cur={am:s.am.slice(),pm:s.pm.slice(),atp:s.atp.slice()};
+  persist();render();say("Copied — adjust, then commit");
+}
+function commitNext(){
+  const key=addD(state.cur,7),P=wk(key).proj;
+  if(sum(P.cur.am,0,6)+sum(P.cur.pm,0,6)+sum(P.cur.atp,0,6)===0){alert("Nothing to commit yet.");return}
+  P.orig={am:P.cur.am.slice(),pm:P.cur.pm.slice(),atp:P.cur.atp.slice()};
+  P.lockedAt=new Date().toISOString().slice(0,16).replace("T"," ");P.revs=[];
+  persist();render();say(label(key)+" committed and locked");
+}
+
+/* ══════════ variance ══════════ */
+const lastIdx=w=>{for(let i=6;i>=0;i--)if(anyHave(w.act,i))return i;return -1};
+function drawVar(){
+  const key=state.cur,w=wk(key),P=w.proj.orig||w.proj.cur,a=w.act;
+  const sel=document.getElementById("through"),li=lastIdx(w);
+  if(sel.dataset.k!==key){
+    sel.dataset.k=key;
+    sel.innerHTML=`<option value="full">Full week (Mon–Sun)</option>`+
+      DAYS.map((d,i)=>`<option value="${i}">Mon–${d} (${fmtDate(addD(key,i))})</option>`).join("");
+    state.through=(li>=0&&li<6)?String(li):"full";
+  }
+  sel.value=state.through;
+  const idx=state.through==="full"?6:+state.through;
+  const rng=(idx?"Mon–"+DAYS[idx]:"Mon only")+" · "+fmtDate(key)+"–"+fmtDate(addD(key,idx));
+  const gaps=[];for(let i=0;i<=idx;i++)if(!anyHave(a,i))gaps.push(DAYS[i]);
+  const part=[];for(let i=0;i<=idx;i++)if(anyHave(a,i)&&!allHave(a,i))part.push(DAYS[i]);
+  document.getElementById("throughNote").innerHTML=
+    `Both sides use <strong>${rng}</strong>, same days on both. `+
+    (gaps.length?`<span class="warn">No actuals for ${gaps.join(", ")} — this range reads as a miss until they land.</span>`
+     :part.length?`<span class="warn">${part.join(", ")} ${part.length===1?"is":"are"} missing a bucket — the total is understated.</span>`
+     :`Complete for this range.`);
+  let h=`<table><tr><th class="lbl">${label(key)} · ${rng}</th>
+    <th>Projection</th><th>Actual</th><th>Variance</th><th>vs proj</th><th>Share of net</th></tr>`;
+  const pT=sum(P.am,0,idx)+sum(P.pm,0,idx)+sum(P.atp,0,idx),aT=sum(totArr(a),0,idx);
+  BUCKETS.forEach(b=>{
+    const ps=sum(P[b.k],0,idx),as=sum(a[b.k],0,idx),d=r2(as-ps);
+    h+=`<tr><td class="lbl"><span class="swatch" style="background:var(${b.c})"></span>${b.n}</td>
+      <td class="num">${money(ps)}</td><td class="num">${money(as)}</td>
+      <td class="num ${d>0?"good":d<0?"bad":"dim"}">${money(d)}</td>
+      <td class="num ${d>0?"good":d<0?"bad":"dim"}">${ps?pct(d,ps):"—"}</td>
+      <td class="num dim">${aT?pct(as,aT):"—"}</td></tr>`});
+  const dT=r2(aT-pT);
+  h+=`<tr class="tot"><td class="lbl">TOTAL NET</td><td class="num">${money(pT)}</td><td class="num">${money(aT)}</td>
+    <td class="num ${dT>0?"good":dT<0?"bad":"dim"}">${money(dT)}</td>
+    <td class="num ${dT>0?"good":dT<0?"bad":"dim"}">${pT?pct(dT,pT):"—"}</td><td></td></tr></table>`;
+  const pd=P.am.map((v,i)=>r2(v+P.pm[i]+P.atp[i])),ad=totArr(a);
+  h+=`<table style="margin-top:10px"><tr><th class="lbl">Daily net</th>`+
+     DAYS.map((d,i)=>`<th${i>idx?' class="dim"':""}>${d} ${fmtDate(addD(key,i))}</th>`).join("")+
+     `<th class="total-col">TOTAL</th></tr>`;
+  h+=`<tr><td class="lbl">Projection</td>`+pd.map((v,i)=>`<td class="num${i>idx?" dim":""}">${money(v)}</td>`).join("")+
+     `<td class="num total-col">${money(sum(pd,0,idx))}</td></tr>`;
+  h+=`<tr><td class="lbl">Actual</td>`+ad.map((v,i)=>
+     `<td class="num${i>idx?" dim":""}">${anyHave(a,i)?money(v)+(allHave(a,i)?"":"*"):"—"}</td>`).join("")+
+     `<td class="num total-col">${money(aT)}</td></tr>`;
+  h+=`<tr><td class="lbl">Variance</td>`+ad.map((v,i)=>{
+     if(i>idx||!anyHave(a,i))return`<td class="dim">—</td>`;
+     const d=r2(v-pd[i]);
+     return`<td class="num ${d>0?"good":d<0?"bad":"dim"}">${money(d)}</td>`}).join("")+
+     `<td class="num total-col ${dT>0?"good":dT<0?"bad":"dim"}">${money(dT)}</td></tr></table>`;
+  if(part.length)h+=`<div class="mini" style="margin-top:5px">* day is missing at least one bucket</div>`;
+  document.getElementById("varTable").innerHTML=h;
+}
+
+/* ══════════ covers + history ══════════ */
+function drawCovers(){
+  const key=state.cur,a=wk(key).act;
+  if(!BUCKETS.some(b=>sum(a.ord[b.k],0,6)||sum(a.gst[b.k],0,6))){
+    document.getElementById("covTable").innerHTML=
+      `<div class="alert i">No order or guest counts for ${label(key)} yet — they arrive automatically with the
+       <em>Total orders</em> and <em>Total guests</em> columns in the exports.</div>`;return}
+  let h=`<table>${headRow(key)}`;
+  BUCKETS.forEach(b=>{
+    const net=a[b.k],o=a.ord[b.k],g=a.gst[b.k];
+    h+=`<tr><td class="lbl"><span class="swatch" style="background:var(${b.c})"></span>${b.n} guests</td>`+
+      g.map(v=>`<td class="num${v?"":" dim"}">${v||"—"}</td>`).join("")+
+      `<td class="num total-col">${sum(g,0,6)||"—"}</td></tr>`;
+    h+=`<tr><td class="lbl dim" style="font-weight:400;padding-left:20px">avg / guest</td>`+
+      g.map((v,i)=>`<td class="num dim">${v?money(net[i]/v,true):"—"}</td>`).join("")+
+      `<td class="num total-col dim">${sum(g,0,6)?money(sum(net,0,6)/sum(g,0,6),true):"—"}</td></tr>`;
+    h+=`<tr><td class="lbl dim" style="font-weight:400;padding-left:20px">avg / order</td>`+
+      o.map((v,i)=>`<td class="num dim">${v?money(net[i]/v,true):"—"}</td>`).join("")+
+      `<td class="num total-col dim">${sum(o,0,6)?money(sum(net,0,6)/sum(o,0,6),true):"—"}</td></tr>`;
+  });
+  const G=[0,1,2,3,4,5,6].map(i=>BUCKETS.reduce((t,b)=>t+(a.gst[b.k][i]||0),0)),N=totArr(a);
+  h+=`<tr class="tot"><td class="lbl">All guests</td>`+G.map(v=>`<td class="num">${v||"—"}</td>`).join("")+
+     `<td class="num total-col">${sum(G,0,6)||"—"}</td></tr>`;
+  h+=`<tr class="tot"><td class="lbl">Net per guest</td>`+G.map((v,i)=>
+     `<td class="num">${v?money(N[i]/v,true):"—"}</td>`).join("")+
+     `<td class="num total-col">${sum(G,0,6)?money(sum(N,0,6)/sum(G,0,6),true):"—"}</td></tr></table>`;
+  document.getElementById("covTable").innerHTML=h;
+}
+function drawHist(){
+  const keys=dataKeys().reverse();
+  if(!keys.length){document.getElementById("histTable").innerHTML=
+    `<div class="alert i">No weeks stored yet. Drop some exports, or open a workbook from the shared folder.</div>`;return}
+  let h=`<table><tr><th class="lbl">Week</th><th>CKC AM</th><th>CKC PM</th><th>ATP</th>
+    <th class="total-col">TOTAL NET</th><th>Projection</th><th>Variance</th><th>Guests</th><th>Per guest</th><th></th></tr>`;
+  keys.forEach(k=>{
+    const w=state.weeks[k],a=w.act,P=w.proj.orig||w.proj.cur;
+    const aT=sum(totArr(a),0,6),pT=sum(P.am,0,6)+sum(P.pm,0,6)+sum(P.atp,0,6),d=r2(aT-pT);
+    const g=BUCKETS.reduce((t,b)=>t+sum(a.gst[b.k],0,6),0);
+    const cw=complete(w);
+    h+=`<tr><td class="lbl" style="cursor:pointer" onclick="state.cur='${k}';state.through='full';persist();render()">
+        ${label(k)} <span class="mini dim">${fmtDate(k)}</span></td>
+      <td class="num">${money(sum(a.am,0,6))}</td><td class="num">${money(sum(a.pm,0,6))}</td>
+      <td class="num">${money(sum(a.atp,0,6))}</td>
+      <td class="num total-col">${aT?money(aT):"—"}</td>
+      <td class="num dim">${pT?money(pT):"—"}</td>
+      <td class="num ${!pT||!aT?"dim":d>0?"good":"bad"}">${pT&&aT?money(d)+" ("+pct(d,pT)+")":"—"}</td>
+      <td class="num dim">${g||"—"}</td><td class="num dim">${g?money(aT/g,true):"—"}</td>
+      <td class="mini ${cw?"dim":"warn"}">${cw?"":"partial"}</td></tr>`;
+  });
+  document.getElementById("histTable").innerHTML=h+`</table>`;
+}
+
+/* ══════════ KPIs, flags, nav ══════════ */
+function drawKpis(){
+  const key=state.cur,w=wk(key),a=w.act,P=w.proj.orig||w.proj.cur;
+  const idx=state.through==="full"?6:+state.through;
+  const pT=sum(P.am,0,idx)+sum(P.pm,0,idx)+sum(P.atp,0,idx),aT=sum(totArr(a),0,idx),dT=r2(aT-pT);
+  const ckc=r2(sum(a.am,0,idx)+sum(a.pm,0,idx)),atp=sum(a.atp,0,idx);
+  const prev=completeWeeksBefore(key,1)[0];
+  const pv=prev?sum(totArr(state.weeks[prev].act),0,6):0;
+  // Only compare against a whole week a year ago. A closure or a part-imported week would otherwise
+  // read as a huge gain — the July 2025 shutdown week is exactly this shape.
+  const yoyKey=addD(key,-364),yw=state.weeks[yoyKey];
+  const yoyPart=!!yw&&[0,1,2,3,4,5,6].some(i=>anyHave(yw.act,i))&&!complete(yw);
+  // A week can be "complete" and still be useless as a comparison: if a venue was dark the whole week
+  // a year ago but is trading now, the gap is a closure, not growth. ATP's July 2025 shutdown is this.
+  const yoyDark=(yw&&complete(yw))
+    ?BUCKETS.filter(b=>sum(yw.act[b.k],0,6)===0&&sum(a[b.k],0,idx)>0).map(b=>b.n):[];
+  const yoy=(yw&&complete(yw)&&!yoyDark.length)?sum(totArr(yw.act),0,6):0;
+  document.getElementById("kpis").innerHTML=`
+    <div class="kpi"><div class="k">Actual net</div><div class="v">${money(aT)}</div>
+      <div class="n">${idx===6?"full week":"through "+DAYS[idx]}</div></div>
+    <div class="kpi"><div class="k">Projection</div><div class="v">${money(pT)}</div>
+      <div class="n">${w.proj.lockedAt?"committed baseline":"<span class='warn'>uncommitted</span>"}</div></div>
+    <div class="kpi"><div class="k">Variance</div><div class="v ${dT>0?"good":dT<0?"bad":""}">${money(dT)}</div>
+      <div class="n">${pT?pct(dT,pT)+" vs projection":"—"}</div></div>
+    <div class="kpi"><div class="k">CKC / ATP</div>
+      <div class="v" style="font-size:15px">${money(ckc)} <span class="dim">/</span> ${money(atp)}</div>
+      <div class="n">${aT?pct(ckc,aT)+" / "+pct(atp,aT):"—"}</div></div>
+    <div class="kpi"><div class="k">Lunch share of CKC</div><div class="v">${ckc?pct(sum(a.am,0,idx),ckc):"—"}</div>
+      <div class="n">${money(sum(a.am,0,idx))} of ${money(ckc)}</div></div>
+    <div class="kpi"><div class="k">vs last complete week</div>
+      <div class="v ${pv&&aT?(aT>pv?"good":"bad"):""}" style="font-size:17px">${pv&&aT?money(aT-pv):"—"}</div>
+      <div class="n">${pv?label(prev)+" ran "+money(pv):"no complete week yet"}</div></div>
+    <div class="kpi"><div class="k">Same week last year</div>
+      <div class="v ${yoy&&aT?(aT>yoy?"good":"bad"):""}" style="font-size:17px">${yoy&&aT?pct(aT-yoy,yoy):"—"}</div>
+      <div class="n">${yoy?money(yoy)+" in "+label(yoyKey)
+        :yoyDark.length?`<span class="warn">${yoyDark.join(" and ")} was dark all of ${label(yoyKey)} — withheld</span>`
+        :yoyPart?`<span class="warn">${label(yoyKey)} is only ${daysComplete(yw)}/7 days — withheld</span>`
+        :"needs 52 weeks of history"}</div></div>`;
+}
+function drawFlags(){
+  const key=state.cur,w=wk(key),a=w.act,f=[];
+  if(state.lastChanges&&state.lastChanges.length)
+    f.push({c:"i",t:`<strong>Import changed ${state.lastChanges.length} value${state.lastChanges.length===1?"":"s"} already stored:</strong><br>`+
+      state.lastChanges.slice(0,8).map(c=>`${DAYS[dow(c.d)]} ${fmtDate(c.d)} ${c.b}: ${money(c.old,true)} → ${money(c.nv,true)} (${c.delta>0?"+":""}${money(c.delta,true)})`).join("<br>")+
+      (state.lastChanges.length>8?`<br>… and ${state.lastChanges.length-8} more`:"")+
+      `<br><span class="mini">Late voids and comps land here. Worth a look before trusting either number.</span>`});
+  const miss=[];
+  for(let i=0;i<7;i++){if(!anyHave(a,i))continue;
+    const m=BUCKETS.filter(b=>!a.have[b.k][i]).map(b=>b.n);
+    if(m.length)miss.push(`${DAYS[i]} ${fmtDate(addD(key,i))} (${m.join(", ")})`)}
+  if(miss.length)f.push({c:"",t:`<strong>Partial days — a bucket hasn't been imported:</strong> ${miss.join("; ")}.
+    Totals are understated until you pull the matching export.`});
+  for(let i=0;i<7;i++)
+    if(a.have.am[i]&&a.am[i]>0&&a.have.pm[i]&&a.pm[i]<=0)
+      f.push({c:"b",t:`<strong>${DAYS[i]} ${fmtDate(addD(key,i))} looks incomplete.</strong>
+        Lunch rang ${money(a.am[i],true)} but dinner is zero.`});
+  if(!w.proj.lockedAt&&anyHave(a,0))
+    f.push({c:"",t:`<strong>${label(key)} projection isn't committed</strong> and the week has already started. There's no fixed baseline to measure against.`});
+  const nx=wk(addD(state.cur,7)).proj;
+  if(sum(nx.cur.am,0,6)+sum(nx.cur.pm,0,6)+sum(nx.cur.atp,0,6)===0)
+    f.push({c:"b",t:`<strong>${label(addD(state.cur,7))} has no projection.</strong> Set a target in section 6.`});
+  if(w.proj.revs&&w.proj.revs.length)
+    f.push({c:"",t:`<strong>${w.proj.revs.length} post-commit revision${w.proj.revs.length===1?"":"s"}</strong> on this week. Headline variance still uses the original.`});
+  const acc=completeWeeksBefore(key,4).map(k=>{
+    const x=state.weeks[k],p=x.proj.orig||x.proj.cur;
+    const pt=sum(p.am,0,6)+sum(p.pm,0,6)+sum(p.atp,0,6),at=sum(totArr(x.act),0,6);
+    return pt&&at?{k,d:r2(at-pt),p:pt}:null}).filter(Boolean);
+  if(acc.length>=2){
+    const swing=Math.max(...acc.map(x=>Math.abs(x.d/x.p)))*100;
+    f.push({c:swing>15?"":"g",t:`<strong>Forecast accuracy, last ${acc.length} complete weeks:</strong> `+
+      acc.map(x=>`${label(x.k)} ${x.d>0?"+":""}${pct(x.d,x.p)}`).join(", ")+`.`+
+      (swing>15?` A ${swing.toFixed(0)}% swing means treat the projection as a target, not a staffing input.`:"")});
+  }
+  if(state.savedAt)f.push({c:"g",t:`<span class="mini">Last saved to file ${esc(state.savedAt)}. The browser copy is a buffer — the file in Drive is the record.</span>`});
+  document.getElementById("flags").innerHTML=f.map(x=>`<div class="alert ${x.c}">${x.t}</div>`).join("");
+}
+function drawNav(){
+  const keys=dataKeys();
+  if(!keys.includes(state.cur))keys.push(state.cur);
+  keys.sort();
+  const sel=document.getElementById("weekSel");
+  sel.innerHTML=keys.slice().reverse().map(k=>{
+    const w=state.weeks[k],t=w?sum(totArr(w.act),0,6):0;
+    return`<option value="${k}" ${k===state.cur?"selected":""}>${label(k)} · ${fmtDate(k)}${t?" · "+money(t):" · —"}</option>`
+  }).join("");
+  sel.value=state.cur;
+  // recent-weeks strip, up to 26, ending at the current week
+  const ci=keys.indexOf(state.cur);
+  const win=keys.slice(Math.max(0,ci-25),ci+1);
+  const vals=win.map(k=>state.weeks[k]?sum(totArr(state.weeks[k].act),0,6):0);
+  const mx=Math.max(...vals,1);
+  document.getElementById("strip").innerHTML=win.map((k,i)=>{
+    const w=state.weeks[k],pt=w&&!complete(w);
+    return`<div class="b ${k===state.cur?"on":""} ${pt&&vals[i]?"part":""}"
+      style="height:${Math.max(3,vals[i]/mx*44)}px"
+      title="${label(k)} ${fmtDate(k)} — ${vals[i]?money(vals[i]):"no data"}${pt?" (partial)":""}"
+      onclick="state.cur='${k}';state.through='full';persist();render()"></div>`}).join("");
+  document.getElementById("stripNote").innerHTML=
+    `${keys.length} week${keys.length===1?"":"s"} stored${win.length<keys.length?`, showing the last ${win.length}`:""}`+
+    ` · hatched bars are partial weeks · click to jump`;
+  document.getElementById("weekMeta").innerHTML=
+    `${label(state.cur)} · Mon ${fmtDate(state.cur)} – Sun ${fmtDate(addD(state.cur,6))}, ${mk(state.cur).getUTCFullYear()}`;
+}
+function shiftWeek(n){state.cur=addD(state.cur,7*n);state.through="full";persist();render()}
+function gotoToday(){state.cur=monday(iso(new Date()));state.through="full";persist();render()}
+function setAnchor(){
+  state.anchor={period:+document.getElementById("aP").value||8,
+    week:+document.getElementById("aW").value||1,
+    start:monday(document.getElementById("aD").value||"2026-07-06"),
+    wpp:+document.getElementById("aWPP").value||4,
+    ppy:+document.getElementById("aPPY").value||13};
+  persist();render();
+}
+function drawFirstRun(){
+  const n=Object.keys(state.weeks).length;
+  document.getElementById("firstRun").innerHTML=n?"":
+    `<div class="alert i"><strong>Nothing stored yet.</strong> If there's a workbook in the shared Drive folder, hit
+     <em>Open workbook</em> up top. Otherwise just drop the three Toast exports below and start the history here.</div>`;
+}
+function render(){
+  const A=state.anchor;
+  document.getElementById("aP").value=A.period;document.getElementById("aW").value=A.week;
+  document.getElementById("aD").value=A.start;document.getElementById("aWPP").value=A.wpp;
+  document.getElementById("aPPY").value=A.ppy;
+  document.getElementById("cents").checked=!!state.cents;
+  document.getElementById("autosave").checked=state.autosave!==false;
+  drawDirty();
+  document.getElementById("anchorNote").innerHTML=
+    `On this anchor, period 1 week 1 begins Monday <strong>${addD(A.start,-7*((A.period-1)*A.wpp+(A.week-1)))}</strong>
+     and today falls in <strong>${label(monday(iso(new Date())))}</strong>.
+     <span class="warn">Confirm against the official fiscal calendar</span> — this was inferred from the sheet labels
+     in the original spreadsheet, not from a published calendar.`;
+  drawFirstRun();drawNav();drawVar();drawKpis();drawFlags();
+  drawActuals();drawProj();drawNext();drawCovers();drawHist();
+}
+
+/* ══════════ boot ══════════ */
+(function(){
+  const saved=restore();
+  state=saved?Object.assign(fresh(),saved):fresh();
+  const dz=document.getElementById("drop"),fi=document.getElementById("csvin");
+  dz.onclick=()=>fi.click();
+  fi.onchange=()=>{handleFiles(fi.files);fi.value=""};
+  ["dragenter","dragover"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add("hot")}));
+  ["dragleave","drop"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove("hot")}));
+  dz.addEventListener("drop",ev=>handleFiles(ev.dataTransfer.files));
+  document.body.addEventListener("dragover",e=>e.preventDefault());
+  document.body.addEventListener("drop",e=>e.preventDefault());
+  window.addEventListener("beforeunload",e=>{
+    if(!dirty||!Object.keys(state.weeks).length)return;
+    e.preventDefault();e.returnValue="";return""});   // browser shows its own "leave site?" prompt
+  render();dirty=false;drawDirty();
+})();
+</script>
+</body>
+</html>
