@@ -99,10 +99,10 @@ ol.steps b{color:var(--tx)}
   </div>
   <div class="row">
     <button class="pri" onclick="document.getElementById('loadjson').click()">Open workbook</button>
-    <input type="file" id="loadjson" accept=".json" style="display:none" onchange="loadFile(this)">
+    <input type="file" id="loadjson" accept=".json,.csv,.tsv,.txt" multiple style="display:none" onchange="loadFile(this)">
     <button onclick="saveFile()">Save workbook</button>
     <button onclick="exportXlsx()">Export for Drive</button>
-    <button class="sm" onclick="exportCsv()">CSV</button>
+    <button class="sm" id="advBtn" onclick="toggleAdv()">Analysis</button>
   </div>
 </div>
 
@@ -119,38 +119,44 @@ ol.steps b{color:var(--tx)}
     <span class="swatch" style="background:var(--atp)"></span><strong>ATP</strong> 5pm&ndash;close.
     Any date range, any number of weeks &mdash; pull twelve months at once if you want to backfill.
   </div>
-  <div id="drop"><strong>Drop CSVs here</strong> or click to choose</div>
-  <input type="file" id="csvin" accept=".csv,.txt,.tsv" multiple style="display:none">
+  <div id="drop"><strong>Drop CSVs here</strong> or click to choose
+    <div class="mini" style="margin-top:4px">A saved <code>.json</code> workbook works here too</div></div>
+  <input type="file" id="csvin" accept=".csv,.txt,.tsv,.json" multiple style="display:none">
   <div id="staged"></div>
   <div id="importPreview"></div>
 </div>
 
-<!-- ═══ 2 WEEK ═══ -->
+<!-- ═══ 2 THE WEEK ═══ -->
 <div class="panel">
   <div class="row" style="justify-content:space-between;align-items:flex-start">
     <div>
-      <h2 style="margin:0">2 &middot; Week</h2>
+      <h2 style="margin:0">2 &middot; The week</h2>
       <div class="mini" id="weekMeta" style="margin-top:4px"></div>
     </div>
     <div class="row">
+      <span id="actSrc"></span>
       <select id="weekSel" onchange="state.cur=this.value;state.through='full';persist();render()"></select>
       <button class="sm" onclick="shiftWeek(-1)">&larr;</button>
       <button class="sm" onclick="shiftWeek(1)">&rarr;</button>
       <button class="sm" onclick="gotoToday()">Today</button>
     </div>
   </div>
-  <div class="strip" id="strip"></div>
-  <div class="mini" id="stripNote" style="margin:3px 0 12px"></div>
-  <div class="grid2" id="kpis"></div>
-  <div id="flags" style="margin-top:11px"></div>
+  <div id="flags" style="margin-top:10px"></div>
+  <div class="scroll" style="margin-top:10px"><div id="actTable"></div></div>
+  <div class="grid2" id="kpis" style="margin-top:12px"></div>
+  <details style="margin-top:10px">
+    <summary>Recent weeks</summary>
+    <div class="strip" id="strip"></div>
+    <div class="mini" id="stripNote" style="margin-top:3px"></div>
+  </details>
 </div>
 
 <!-- ═══ 3 VARIANCE ═══ -->
 <div class="panel">
   <div class="row" style="justify-content:space-between">
-    <h2 style="margin:0">3 &middot; Projection vs actual</h2>
+    <h2 style="margin:0">3 &middot; Did we hit the number?</h2>
     <label class="f" style="flex-direction:row;align-items:center;gap:7px">
-      <span>Compare through</span>
+      <span>Through</span>
       <select id="through" onchange="state.through=this.value;render()"></select>
     </label>
   </div>
@@ -158,35 +164,10 @@ ol.steps b{color:var(--tx)}
   <div class="scroll"><div id="varTable"></div></div>
 </div>
 
-<!-- ═══ 4 ACTUALS ═══ -->
+<!-- ═══ 4 NEXT WEEK ═══ -->
 <div class="panel">
   <div class="row" style="justify-content:space-between">
-    <h2 style="margin:0">4 &middot; Actuals</h2>
-    <span id="actSrc"></span>
-  </div>
-  <div class="mini" style="margin:6px 0 10px">
-    All three buckets come from their own export and TOTAL NET is their sum, so it always reconciles.
-    Blank means no export has covered that day yet; <span class="dim">closed</span> means the export covered it and
-    Toast reported nothing. Type over any cell to override.
-  </div>
-  <div class="scroll"><div id="actTable"></div></div>
-</div>
-
-<!-- ═══ 5 PROJECTIONS ═══ -->
-<div class="panel">
-  <div class="row" style="justify-content:space-between">
-    <h2 style="margin:0">5 &middot; Projections for this week</h2>
-    <div class="row" id="projCtl"></div>
-  </div>
-  <div class="mini" style="margin:6px 0 10px" id="projNote"></div>
-  <div class="scroll"><div id="projTable"></div></div>
-  <div id="revLog"></div>
-</div>
-
-<!-- ═══ 6 NEXT WEEK ═══ -->
-<div class="panel">
-  <div class="row" style="justify-content:space-between">
-    <h2 style="margin:0">6 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
+    <h2 style="margin:0">4 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
     <div class="row">
       <button class="sm" onclick="seedNext('proj')">Copy this projection</button>
       <button class="sm" onclick="seedNext('act')">Copy this actual</button>
@@ -206,9 +187,37 @@ ol.steps b{color:var(--tx)}
   <div id="mixNote"></div>
 </div>
 
-<!-- ═══ 7 COVERS ═══ -->
+<!-- ══════════ ANALYSIS — hidden unless the Analysis button is on ══════════ -->
+<div id="advanced" style="display:none">
+
+<div class="panel">
+  <h2>Change vs prior periods</h2>
+  <div class="mini" id="trendNote" style="margin:-2px 0 11px"></div>
+  <div class="scroll"><div id="trendTable"></div></div>
+  <details style="margin-top:11px">
+    <summary>Day by day &mdash; each weekday against the same weekday in that period</summary>
+    <div class="scroll" style="margin-top:10px"><div id="trendDaily"></div></div>
+  </details>
+  <div id="trendWhy"></div>
+  <div class="hr"></div>
+  <h2 style="margin-bottom:4px">Period roll-up</h2>
+  <div class="mini" id="periodNote" style="margin-bottom:10px"></div>
+  <div class="scroll"><div id="periodTable"></div></div>
+  <div id="periodWhy"></div>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">This week's committed projection</h2>
+    <div class="row" id="projCtl"></div>
+  </div>
+  <div class="mini" style="margin:6px 0 10px" id="projNote"></div>
+  <div class="scroll"><div id="projTable"></div></div>
+  <div id="revLog"></div>
+</div>
+
 <details class="panel">
-  <summary><strong>7 &middot; Covers &amp; average check</strong> &mdash; <span class="warn">indicative only, not verified</span></summary>
+  <summary><strong>Covers &amp; average check</strong> &mdash; <span class="warn">indicative only, not verified</span></summary>
   <div class="alert" style="margin-top:11px">
     <strong>Treat these as rough.</strong> The net sales figures are confirmed to be scoped correctly per bucket &mdash;
     lunch, dinner and ATP sum exactly to the day totals from the original spreadsheet, so the revenue-center filter is
@@ -220,11 +229,12 @@ ol.steps b{color:var(--tx)}
   <div class="scroll" style="margin-top:11px"><div id="covTable"></div></div>
 </details>
 
-<!-- ═══ 8 HISTORY ═══ -->
 <details class="panel">
-  <summary><strong>8 &middot; All weeks</strong> &mdash; every week stored, newest first</summary>
+  <summary><strong>All weeks</strong> &mdash; every week stored, newest first</summary>
   <div class="scroll" style="margin-top:11px"><div id="histTable"></div></div>
 </details>
+
+</div><!-- /advanced -->
 
 <details class="panel">
   <summary><strong>How this runs each week</strong></summary>
@@ -383,27 +393,50 @@ function saveFile(auto){
   say(auto?`Saved automatically &mdash; all ${n} weeks written to your downloads folder`
           :`Workbook saved &mdash; all ${n} weeks in one file. Put it in the shared Drive folder.`);
 }
-function loadFile(inp){
-  const f=inp.files[0];if(!f)return;const rd=new FileReader();
+function loadWorkbook(f,then){
+  const rd=new FileReader();
   rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!p.weeks)throw 0;
-    state=Object.assign(fresh(),p);persist();render();
-    say("Loaded "+Object.keys(state.weeks).length+" week"+(Object.keys(state.weeks).length===1?"":"s"))}
-    catch(e){alert("That doesn't look like a tracker workbook. Pick the .json saved by this tool.")}};
-  rd.readAsText(f);inp.value="";
+    state=Object.assign(fresh(),p);persist();dirty=false;render();
+    say("Loaded "+Object.keys(state.weeks).length+" week"+(Object.keys(state.weeks).length===1?"":"s")+
+        " from "+esc(f.name))}
+    catch(e){alert("Couldn't read \""+f.name+"\" as a workbook.\n\nIt isn't a tracker .json file. If it's a Toast "+
+      "export, it imported anyway — check the preview below.")}
+    if(then)then()};
+  rd.onerror=()=>{if(then)then()};
+  rd.readAsText(f);
 }
+// Both file controls accept either kind. Handing the workbook button a Toast CSV, or dropping a workbook
+// on the CSV zone, used to throw an error at you; now it just does the obvious thing.
+function ingest(files){
+  const list=[...files];if(!list.length)return;
+  const json=list.filter(f=>/\.json$/i.test(f.name));
+  const csv =list.filter(f=>!/\.json$/i.test(f.name));
+  // Workbook first, then the exports — bucket matching by sales level needs the history in place.
+  if(json.length){
+    loadWorkbook(json[0],csv.length?()=>handleFiles(csv):null);
+    if(json.length>1)say("Loaded "+esc(json[0].name)+" — only one workbook opens at a time, ignored "+(json.length-1)+" more");
+  }else if(csv.length)handleFiles(csv);
+}
+function loadFile(inp){ingest(inp.files);inp.value=""}
 function weekRows(){
   const rows=[["Week starting","Period week","CKC AM","CKC PM","ATP","TOTAL NET","CKC TOTAL",
-    "Proj AM","Proj PM","Proj ATP","Proj TOTAL","Variance","Complete","Guests","Net per guest"]];
+    "Proj AM","Proj PM","Proj ATP","Proj TOTAL","Variance","Complete","Guests","Net per guest",
+    "WoW %","vs P-4 %","vs T13 %","YoY %"]];
+  const savedCur=state.cur;
   dataKeys().reverse().forEach(k=>{
     const w=state.weeks[k],a=w.act,P=w.proj.orig||w.proj.cur;
     const pT=sum(P.am,0,6)+sum(P.pm,0,6)+sum(P.atp,0,6),aT=sum(totArr(a),0,6);
     const g=BUCKETS.reduce((t,b)=>t+sum(a.gst[b.k],0,6),0);
     // Variance is only emitted for whole weeks. A part-week comparison in a shared file reads as a
     // miss that isn't real — that is exactly the error the old spreadsheet kept making.
+    const T=trendFor(k),pc={};
+    T.rows.forEach(r=>pc[r.id]=(r.total&&typeof r.total.p==="number")?r2(r.total.p*10000)/10000:"");
     rows.push([k,label(k),sum(a.am,0,6),sum(a.pm,0,6),sum(a.atp,0,6),aT,
       r2(sum(a.am,0,6)+sum(a.pm,0,6)),sum(P.am,0,6),sum(P.pm,0,6),sum(P.atp,0,6),pT,
-      (complete(w)&&pT&&aT)?r2(aT-pT):"",daysComplete(w)+"/7",g||"",g?r2(aT/g):""]);
+      (complete(w)&&pT&&aT)?r2(aT-pT):"",daysComplete(w)+"/7",g||"",g?r2(aT/g):"",
+      pc.wow,pc.p4,pc.t13,pc.yoy]);
   });
+  state.cur=savedCur;
   return rows;
 }
 function exportCsv(){
@@ -545,6 +578,36 @@ function weekSheetRows(key){
              whole?MB(r2(sum(totArr(a),0,6)-sum(pd,0,6))):X("")]);
   BUCKETS.forEach(b=>rows.push([L(b.n),...a[b.k].map((v,i)=>allHave(a,i)?M(r2(v-P[b.k][i])):X("")),
              whole?MB(r2(sum(a[b.k],0,6)-sum(P[b.k],0,6))):X("")]));
+  // ---- change vs prior periods, same guards as on screen ----
+  const TR=trendFor(key);
+  rows.push([]);
+  rows.push(hdr("CHANGE vs PRIOR PERIODS"+(TR.partial?`  —  matched days only (${TR.idxs.map(i=>DAYS[i]).join(", ")})`:"")));
+  const PC=v=>(v&&typeof v.p==="number")?{v:r2(v.p*10000)/10000,s:8}:X(v&&v.dark?"withheld":"—");
+  TR.rows.forEach(r=>{
+    if(r.why){rows.push([L(r.short),X(r.why)]);return}
+    rows.push([L(r.short+"  daily %"),...r.daily.map(x=>PC(x)),PC(r.total)]);
+  });
+  rows.push([]);
+  rows.push([L("by bucket"),H("TOTAL NET"),H("CKC AM"),H("CKC PM"),H("ATP"),X(""),X(""),X(""),H("reference")]);
+  TR.rows.forEach(r=>{
+    if(r.why)return;
+    rows.push([L(r.short),PC(r.total),...BUCKETS.map(b=>PC(r.buckets[b.k])),X(""),X(""),X(""),
+      X(r.n>1?`avg of ${r.n} wks`:label(r.keys[0]))]);
+  });
+  // ---- period roll-up ----
+  const PR=periodCompare(key);
+  if(PR.pos.length){
+    rows.push([]);
+    rows.push(hdr(`${PR.cur.name} ROLL-UP`+(PR.whole?" (complete)":`  —  through week ${PR.pos.map(i=>i+1).join(", ")}, matched positions only`)));
+    rows.push([L(PR.cur.name+" to date"),MB(BUCKETS.reduce((s,b)=>s+PR.curSums[b.k],0)),
+      ...BUCKETS.map(b=>MB(PR.curSums[b.k])),X(""),X(""),X("")]);
+    rows.push([L(""),H("TOTAL NET"),H("CKC AM"),H("CKC PM"),H("ATP"),X(""),X(""),X(""),H("reference")]);
+    PR.rows.forEach(r=>{
+      if(r.why){rows.push([L(r.name),X(r.why)]);return}
+      rows.push([L(r.name+" ("+r.refName+")"),PC(r.total),...BUCKETS.map(b=>PC(r.buckets[b.k])),
+        X(""),X(""),X(""),M(BUCKETS.reduce((s,b)=>s+r.ref[b.k],0))]);
+    });
+  }
   const g=[0,1,2,3,4,5,6].map(i=>BUCKETS.reduce((t,b)=>t+(a.gst[b.k][i]||0),0));
   if(sum(g,0,6)){
     rows.push([]);
@@ -558,10 +621,18 @@ function weekSheetRows(key){
 function exportXlsx(){
   const keys=dataKeys().reverse();
   if(!keys.length){alert("No weeks to export yet.");return}
-  const flat=weekRows();
-  const sheets=[{name:"All weeks",widths:[14,12,11,11,11,12,12,11,11,11,12,11,10,9,12],
-    rows:[flat[0].map(v=>({v,s:1})),...flat.slice(1).map(r=>r.map((v,i)=>
-      i<2?({v,s:6}):(typeof v==="number"?({v,s:i===14?7:3}):({v,s:6}))))]}];
+  const flat=weekRows(),hdr=flat[0];
+  // style by what the column is, not by its index — the index moved once already
+  const styleFor=(v,i)=>{
+    if(typeof v!=="number")return 6;
+    if(/%$/.test(hdr[i]))return 8;            // 0.0%
+    if(hdr[i]==="Net per guest")return 7;     // $#,##0.00
+    if(hdr[i]==="Guests")return 6;
+    return 3;                                 // $#,##0
+  };
+  const sheets=[{name:"All weeks",
+    widths:[14,12,11,11,11,12,12,11,11,11,12,11,10,9,12,10,10,10,10],
+    rows:[hdr.map(v=>({v,s:1})),...flat.slice(1).map(r=>r.map((v,i)=>({v,s:styleFor(v,i)})))]}];
   keys.slice(0,26).forEach(k=>sheets.push({name:label(k)+" "+fmtDate(k).replace("/","-"),
     widths:[26,12,12,12,12,12,12,12,13],rows:weekSheetRows(k)}));
   dl("CKC-ATP Weekly Sales "+state.cur+".xlsx",
@@ -624,7 +695,10 @@ function guessBucketByName(name){
   if(/\batp\b|pond/.test(n))return"atp";
   if(/lunch|brunch|\bam\b|daypart ?1/.test(n))return"am";
   if(/dinner|\bpm\b|night|evening/.test(n))return"pm";
-  return null;                       // no keyword — never silently pick one
+  // CKC only has two buckets. If a file names the venue and doesn't say lunch, it's dinner —
+  // that covers the standard "CKC Sales by day.csv" export without guessing blindly.
+  if(/\bckc\b|clever ?koi/.test(n))return"pm";
+  return null;                       // nothing identifies it — never silently pick one
 }
 // Toast will happily hand you a file called "Sales by day.csv". Rather than defaulting it somewhere
 // plausible-looking, compare its per-open-day level against what each bucket has historically run.
@@ -816,10 +890,17 @@ function applyImport(){
 const headRow=key=>`<tr><th class="lbl">${label(key)}</th>`+
   DAYS.map((d,i)=>`<th>${d} ${fmtDate(addD(key,i))}</th>`).join("")+`<th class="total-col">TOTAL</th></tr>`;
 function inRow(name,arr,cb,sw,haveArr){
+  const anyLoaded=dataKeys().length>0;
   return `<tr><td class="lbl">${sw?`<span class="swatch" style="background:var(${sw})"></span>`:""}${name}</td>`+
     arr.map((v,i)=>{const blank=haveArr&&!haveArr[i];
+      // spell out what a blank means — an unloaded workbook and a real Toast gap looked the same
+      const why=blank
+        ?(anyLoaded?"No export has covered this day yet. Pull this bucket for a range that includes it."
+                   :"Nothing is loaded in this browser — open the workbook from Drive first.")
+        :(haveArr&&v===0?"The export covered this day and Toast reported no sales (closed).":"");
       return `<td><input class="cellin" type="text" value="${blank?"":(v?r2(v):"0")}"
-        placeholder="${blank?"—":""}" onchange="${cb}(${i},this.value)" onfocus="this.select()"></td>`}).join("")+
+        placeholder="${blank?"—":""}"${why?` title="${esc(why)}"`:""}
+        onchange="${cb}(${i},this.value)" onfocus="this.select()"></td>`}).join("")+
     `<td class="num total-col">${money(sum(arr,0,6))}</td></tr>`;
 }
 const calcRow=(name,arr,cls,blanks)=>`<tr class="${cls||""}"><td class="lbl">${name}</td>`+
@@ -1016,6 +1097,211 @@ function commitNext(){
   persist();render();say(label(key)+" committed and locked");
 }
 
+/* ══════════ change vs prior periods ══════════
+   Every comparison here obeys the same three rules that the rest of the tool does:
+   1. matched days only — a part week is compared against the same days, never a whole one
+   2. a reference week must actually hold those days, or it is dropped
+   3. if a bucket was dark in the reference but trades now, the number is withheld, not printed  */
+// A reference built from several weeks can hide a closure: one dark week averaged with two live ones
+// still sums above zero. Check each constituent week, not just the aggregate.
+// Single-week references withhold outright; a long average only withholds if a material share is dark.
+function darkBuckets(keys,cur,idxs){
+  const n=keys.length,out=[];
+  BUCKETS.forEach(b=>{
+    if(!(cur[b.k]>0))return;
+    const d=keys.filter(k=>{const a=state.weeks[k].act;
+      return idxs.reduce((s,i)=>s+a[b.k][i],0)===0}).length;
+    if(d)out.push({k:b.k,n:b.n,d,share:d/n,hide:d/n>=0.15});
+  });
+  return out;
+}
+function refWeek(keys,idxs){
+  const use=keys.filter(k=>state.weeks[k]&&idxs.every(i=>allHave(state.weeks[k].act,i)));
+  if(!use.length)return null;
+  const r={am:Z(),pm:Z(),atp:Z()};
+  use.forEach(k=>{const a=state.weeks[k].act;
+    BUCKETS.forEach(b=>{for(let i=0;i<7;i++)r[b.k][i]+=a[b.k][i]})});
+  BUCKETS.forEach(b=>{for(let i=0;i<7;i++)r[b.k][i]=r2(r[b.k][i]/use.length)});
+  r.n=use.length;r.keys=use;return r;
+}
+const TRENDS=[{id:"wow",name:"Prior week",short:"WoW"},
+              {id:"p4", name:"Prior period (4 weeks back)",short:"vs P-4"},
+              {id:"t13",name:"Trailing 13-week average",short:"vs T13"},
+              {id:"yoy",name:"Same week last year",short:"YoY"}];
+function trendKeys(key,id){
+  if(id==="wow")return [addD(key,-7)];
+  if(id==="p4") return [addD(key,-28)];
+  if(id==="yoy")return [addD(key,-364)];
+  return completeWeeksBefore(key,13);
+}
+function trendFor(key){
+  const a=wk(key).act;
+  const idxs=[0,1,2,3,4,5,6].filter(i=>allHave(a,i));
+  const out={idxs,rows:[],partial:idxs.length<7};
+  TRENDS.forEach(T=>{
+    const row={id:T.id,name:T.name,short:T.short};
+    if(!idxs.length){row.why="this week has no complete days yet";out.rows.push(row);return}
+    const ref=refWeek(trendKeys(key,T.id),idxs);
+    if(!ref){row.why=(T.id==="t13")?"no complete weeks behind this one yet"
+      :`${label(trendKeys(key,T.id)[0])} isn't stored with those days complete`;
+      out.rows.push(row);return}
+    row.n=ref.n;row.keys=ref.keys;
+    const cur={},ref_={},dl={};
+    BUCKETS.forEach(b=>{
+      cur[b.k]=r2(idxs.reduce((s,i)=>s+a[b.k][i],0));
+      ref_[b.k]=r2(idxs.reduce((s,i)=>s+ref[b.k][i],0));
+    });
+    const db=darkBuckets(ref.keys,cur,idxs);
+    row.darkNote=db.filter(x=>!x.hide);
+    BUCKETS.forEach(b=>{
+      const bad=db.find(x=>x.k===b.k&&x.hide);
+      dl[b.k]=bad?{dark:true,weeks:bad.d}
+        :(ref_[b.k]===0?(cur[b.k]>0?{dark:true}:{na:true})
+        :{d:r2(cur[b.k]-ref_[b.k]),p:(cur[b.k]-ref_[b.k])/ref_[b.k]});
+    });
+    const ct=r2(BUCKETS.reduce((s,b)=>s+cur[b.k],0)),rt=r2(BUCKETS.reduce((s,b)=>s+ref_[b.k],0));
+    const dark=BUCKETS.filter(b=>dl[b.k].dark).map(b=>b.n);
+    row.buckets=dl;row.cur=cur;row.ref=ref_;
+    row.total=dark.length?{dark:true,who:dark}:(rt?{d:r2(ct-rt),p:(ct-rt)/rt}:{na:true});
+    // Day-level dark guard. Sunday 2026-06-28 lost dinner and ATP in Toast; comparing a normal
+    // Sunday against it printed +425%. A reference day missing a bucket is not a comparison.
+    row.daily=[0,1,2,3,4,5,6].map(i=>{
+      if(!idxs.includes(i))return null;
+      const dk=BUCKETS.filter(b=>ref[b.k][i]===0&&a[b.k][i]>0).map(b=>b.n);
+      if(dk.length)return{dark:true,who:dk};
+      const c=tot(a,i),r=r2(BUCKETS.reduce((s,b)=>s+ref[b.k][i],0));
+      return r?{d:r2(c-r),p:(c-r)/r}:null});
+    // A reference week can also hold a day that is merely suspect rather than empty.
+    row.suspect=ref.keys.length===1
+      ? [0,1,2,3,4,5,6].filter(i=>idxs.includes(i)&&ref.am[i]>0&&ref.pm[i]<=0).map(i=>DAYS[i])
+      : [];
+    out.rows.push(row);
+  });
+  return out;
+}
+const pctCell=(o,wide)=>{
+  if(!o)return `<td class="dim">—</td>`;
+  if(o.dark)return `<td class="warn mini" title="${o.who?o.who.join(" and ")+" was dark in the comparison period":"dark in the comparison period"}">withheld</td>`;
+  if(o.na)return `<td class="dim">—</td>`;
+  const c=o.p>0?"good":o.p<0?"bad":"dim";
+  return `<td class="num ${c}">${(o.p*100).toFixed(1)}%${wide?`<br><span class="mini dim">${money(o.d)}</span>`:""}</td>`;
+};
+function drawTrend(){
+  const key=state.cur,T=trendFor(key);
+  const dayList=T.idxs.map(i=>DAYS[i]).join(", ");
+  document.getElementById("trendNote").innerHTML=
+    !T.idxs.length?`<span class="warn">No complete days in ${label(key)} yet.</span>`
+    :T.partial?`Comparing <strong>${dayList}</strong> only — the days ${label(key)} has in full — against the very same days in each period. Nothing is scaled up to a full week.`
+    :`Full week, ${label(key)}, against the same seven days in each period.`;
+  let h=`<table><tr><th class="lbl">Compared with</th><th class="total-col">TOTAL NET</th>`+
+    BUCKETS.map(b=>`<th><span class="swatch" style="background:var(${b.c})"></span>${b.n}</th>`).join("")+
+    `<th>Reference</th></tr>`;
+  T.rows.forEach(r=>{
+    if(r.why){h+=`<tr><td class="lbl">${r.name}</td><td class="dim mini" colspan="5">${esc(r.why)}</td></tr>`;return}
+    h+=`<tr><td class="lbl">${r.name}</td>`+
+      pctCell(r.total,true).replace('class="num','class="total-col num')+
+      BUCKETS.map(b=>pctCell(r.buckets[b.k],true)).join("")+
+      `<td class="mini dim">${money(r.ref.am+r.ref.pm+r.ref.atp)}${r.n>1?`<br>avg of ${r.n} wks`:`<br>${label(r.keys[0])}`}</td></tr>`;
+  });
+  document.getElementById("trendTable").innerHTML=h+`</table>`;
+  let d=`<table><tr><th class="lbl">Compared with</th>`+
+    DAYS.map((x,i)=>`<th${T.idxs.includes(i)?"":' class="dim"'}>${x} ${fmtDate(addD(key,i))}</th>`).join("")+
+    `<th class="total-col">WEEK</th></tr>`;
+  T.rows.forEach(r=>{
+    if(r.why){d+=`<tr><td class="lbl">${r.short}</td><td class="dim mini" colspan="8">${esc(r.why)}</td></tr>`;return}
+    d+=`<tr><td class="lbl">${r.short}</td>`+r.daily.map(x=>pctCell(x)).join("")+
+       pctCell(r.total).replace('class="num','class="total-col num')+`</tr>`;
+  });
+  document.getElementById("trendDaily").innerHTML=d+`</table>`;
+  const why=T.rows.filter(r=>r.why||(r.total&&r.total.dark));
+  const susp=T.rows.filter(r=>r.suspect&&r.suspect.length);
+  const dayDark=T.rows.filter(r=>r.daily&&r.daily.some(x=>x&&x.dark));
+  let notes="";
+  if(why.length)notes+=`<div class="alert" style="margin-top:10px"><strong>Withheld:</strong> `+
+    why.map(r=>`${r.name} — ${r.why?esc(r.why):r.total.who.join(" and ")+" was dark in that period, so the gap is a closure rather than a change"}`).join("; ")+`.</div>`;
+  if(dayDark.length)notes+=`<div class="alert" style="margin-top:8px"><strong>Individual days withheld:</strong> `+
+    dayDark.map(r=>`${r.short} — `+r.daily.map((x,i)=>x&&x.dark?`${DAYS[i]} (${x.who.join("+")} missing in the reference)`:null).filter(Boolean).join(", ")).join("; ")+`.</div>`;
+  if(susp.length)notes+=`<div class="alert" style="margin-top:8px"><strong>Reference week is suspect:</strong> `+
+    susp.map(r=>`${r.name} (${label(r.keys[0])}) has ${r.suspect.join(", ")} with lunch but no dinner — likely a data gap, so that comparison runs slightly flattering`).join("; ")+`.</div>`;
+  document.getElementById("trendWhy").innerHTML=notes;
+}
+
+/* ══════════ period roll-up ══════════
+   P8 as a whole against P7 as a whole — not week-4-weeks-ago, which is a different question.
+   Periods in progress are compared on matched week positions only: three weeks of P8 against the
+   first three weeks of P7, never against a finished four-week period.  */
+function periodOf(key){
+  const A=state.anchor,wpp=A.wpp;
+  const abs=(A.period-1)*wpp+(A.week-1)+wkDiff(A.start,key);
+  const wi=((abs%wpp)+wpp)%wpp,start=addD(key,-7*wi);
+  return{wi,start,wpp,weeks:[...Array(wpp)].map((_,i)=>addD(start,7*i)),
+         name:label(start).split(" ")[0]};
+}
+function periodSums(weeks,pos){
+  const r={am:0,pm:0,atp:0};let ok=true;
+  pos.forEach(i=>{const k=weeks[i],w=state.weeks[k];
+    if(!w||!complete(w)){ok=false;return}
+    BUCKETS.forEach(b=>r[b.k]=r2(r[b.k]+sum(w.act[b.k],0,6)))});
+  return ok?r:null;
+}
+function periodCompare(key){
+  const cur=periodOf(key),wpp=cur.wpp;
+  const pos=cur.weeks.map((k,i)=>i).filter(i=>state.weeks[cur.weeks[i]]&&complete(state.weeks[cur.weeks[i]]));
+  const out={cur,pos,rows:[],whole:pos.length===wpp};
+  if(!pos.length)return out;
+  const c=periodSums(cur.weeks,pos);
+  out.curSums=c;
+  [{id:"prev",name:"Prior period",start:addD(cur.start,-7*wpp)},
+   {id:"pyoy",name:"Same period last year",start:addD(cur.start,-364)}].forEach(R=>{
+    const ref=periodOf(R.start),row={id:R.id,name:R.name,refName:ref.name};
+    const r=periodSums(ref.weeks,pos);
+    if(!r){row.why=`${ref.name} doesn't have week${pos.length>1?"s":""} ${pos.map(i=>i+1).join(", ")} stored complete`;
+      out.rows.push(row);return}
+    row.ref=r;
+    const refKeys=pos.map(i=>ref.weeks[i]);
+    const db=darkBuckets(refKeys,c,[0,1,2,3,4,5,6]);
+    row.darkNote=db.filter(x=>!x.hide);
+    const dl={};BUCKETS.forEach(b=>{
+      const bad=db.find(x=>x.k===b.k&&x.hide);
+      dl[b.k]=bad?{dark:true,weeks:bad.d}
+        :(r[b.k]===0?(c[b.k]>0?{dark:true}:{na:true})
+        :{d:r2(c[b.k]-r[b.k]),p:(c[b.k]-r[b.k])/r[b.k]})});
+    const ct=r2(BUCKETS.reduce((s,b)=>s+c[b.k],0)),rt=r2(BUCKETS.reduce((s,b)=>s+r[b.k],0));
+    const dark=BUCKETS.filter(b=>dl[b.k].dark).map(b=>b.n);
+    row.buckets=dl;
+    row.total=dark.length?{dark:true,who:dark}:(rt?{d:r2(ct-rt),p:(ct-rt)/rt}:{na:true});
+    out.rows.push(row);
+  });
+  return out;
+}
+function drawPeriod(){
+  const P=periodCompare(state.cur),el=document.getElementById("periodTable");
+  if(!P.pos.length){el.innerHTML=`<div class="mini dim">No complete weeks in ${P.cur.name} yet.</div>`;
+    document.getElementById("periodNote").innerHTML="";return}
+  document.getElementById("periodNote").innerHTML=
+    (P.whole?`<strong>${P.cur.name}</strong> complete, all ${P.cur.wpp} weeks.`
+      :`<strong>${P.cur.name} through week ${P.pos.map(i=>i+1).join(", ")}</strong> — compared against the same week positions in each reference period, never against a finished one.`)+
+    ` Total so far <strong>${money(BUCKETS.reduce((s,b)=>s+P.curSums[b.k],0))}</strong>.`;
+  let h=`<table><tr><th class="lbl">${P.cur.name} vs</th><th class="total-col">TOTAL NET</th>`+
+    BUCKETS.map(b=>`<th><span class="swatch" style="background:var(${b.c})"></span>${b.n}</th>`).join("")+
+    `<th>Reference</th></tr>`;
+  P.rows.forEach(r=>{
+    if(r.why){h+=`<tr><td class="lbl">${r.name}</td><td class="dim mini" colspan="5">${esc(r.why)}</td></tr>`;return}
+    h+=`<tr><td class="lbl">${r.name} <span class="mini dim">${r.refName}</span></td>`+
+      pctCell(r.total,true).replace('class="num','class="total-col num')+
+      BUCKETS.map(b=>pctCell(r.buckets[b.k],true)).join("")+
+      `<td class="mini dim">${money(BUCKETS.reduce((s,b)=>s+r.ref[b.k],0))}</td></tr>`;
+  });
+  el.innerHTML=h+`</table>`;
+  const notes=[];
+  P.rows.forEach(r=>{
+    if(r.total&&r.total.dark)notes.push(`<strong>${r.name}</strong> withheld — ${r.total.who.join(" and ")} was dark for a whole week inside ${r.refName}, so the gap is a closure rather than trading`);
+    (r.darkNote||[]).forEach(x=>notes.push(`<strong>${r.name}</strong> — ${x.n} was dark ${x.d} of ${P.pos.length} week${P.pos.length===1?"":"s"} in ${r.refName}; small enough to keep, but it flatters the comparison`));
+  });
+  document.getElementById("periodWhy").innerHTML=notes.length
+    ?`<div class="alert" style="margin-top:9px">`+notes.join("<br>")+`</div>`:"";
+}
+
 /* ══════════ variance ══════════ */
 const lastIdx=w=>{for(let i=6;i>=0;i--)if(anyHave(w.act,i))return i;return -1};
 function drawVar(){
@@ -1138,27 +1424,26 @@ function drawKpis(){
   const yoyDark=(yw&&complete(yw))
     ?BUCKETS.filter(b=>sum(yw.act[b.k],0,6)===0&&sum(a[b.k],0,idx)>0).map(b=>b.n):[];
   const yoy=(yw&&complete(yw)&&!yoyDark.length)?sum(totArr(yw.act),0,6):0;
-  document.getElementById("kpis").innerHTML=`
-    <div class="kpi"><div class="k">Actual net</div><div class="v">${money(aT)}</div>
-      <div class="n">${idx===6?"full week":"through "+DAYS[idx]}</div></div>
-    <div class="kpi"><div class="k">Projection</div><div class="v">${money(pT)}</div>
-      <div class="n">${w.proj.lockedAt?"committed baseline":"<span class='warn'>uncommitted</span>"}</div></div>
-    <div class="kpi"><div class="k">Variance</div><div class="v ${dT>0?"good":dT<0?"bad":""}">${money(dT)}</div>
-      <div class="n">${pT?pct(dT,pT)+" vs projection":"—"}</div></div>
-    <div class="kpi"><div class="k">CKC / ATP</div>
-      <div class="v" style="font-size:15px">${money(ckc)} <span class="dim">/</span> ${money(atp)}</div>
-      <div class="n">${aT?pct(ckc,aT)+" / "+pct(atp,aT):"—"}</div></div>
-    <div class="kpi"><div class="k">Lunch share of CKC</div><div class="v">${ckc?pct(sum(a.am,0,idx),ckc):"—"}</div>
-      <div class="n">${money(sum(a.am,0,idx))} of ${money(ckc)}</div></div>
-    <div class="kpi"><div class="k">vs last complete week</div>
+  const tiles=[
+   `<div class="kpi"><div class="k">Actual net</div><div class="v">${money(aT)}</div>
+      <div class="n">${idx===6?"full week":"through "+DAYS[idx]}</div></div>`,
+   `<div class="kpi"><div class="k">vs projection</div><div class="v ${dT>0?"good":dT<0?"bad":""}">${money(dT)}</div>
+      <div class="n">${pT?pct(dT,pT)+" of "+money(pT):"<span class='warn'>no projection committed</span>"}</div></div>`,
+   `<div class="kpi"><div class="k">vs last week</div>
       <div class="v ${pv&&aT?(aT>pv?"good":"bad"):""}" style="font-size:17px">${pv&&aT?money(aT-pv):"—"}</div>
-      <div class="n">${pv?label(prev)+" ran "+money(pv):"no complete week yet"}</div></div>
-    <div class="kpi"><div class="k">Same week last year</div>
+      <div class="n">${pv?label(prev)+" ran "+money(pv):"no complete week yet"}</div></div>`,
+   `<div class="kpi"><div class="k">Same week last year</div>
       <div class="v ${yoy&&aT?(aT>yoy?"good":"bad"):""}" style="font-size:17px">${yoy&&aT?pct(aT-yoy,yoy):"—"}</div>
       <div class="n">${yoy?money(yoy)+" in "+label(yoyKey)
-        :yoyDark.length?`<span class="warn">${yoyDark.join(" and ")} was dark all of ${label(yoyKey)} — withheld</span>`
-        :yoyPart?`<span class="warn">${label(yoyKey)} is only ${daysComplete(yw)}/7 days — withheld</span>`
-        :"needs 52 weeks of history"}</div></div>`;
+        :yoyDark.length?`<span class="warn">${yoyDark.join(" and ")} dark that week — withheld</span>`
+        :yoyPart?`<span class="warn">only ${daysComplete(yw)}/7 days stored — withheld</span>`
+        :"needs 52 weeks of history"}</div></div>`,
+   `<div class="kpi"><div class="k">CKC / ATP</div>
+      <div class="v" style="font-size:15px">${money(ckc)} <span class="dim">/</span> ${money(atp)}</div>
+      <div class="n">${aT?pct(ckc,aT)+" / "+pct(atp,aT):"—"}</div></div>`,
+   `<div class="kpi"><div class="k">Lunch share of CKC</div><div class="v">${ckc?pct(sum(a.am,0,idx),ckc):"—"}</div>
+      <div class="n">${money(sum(a.am,0,idx))} of ${money(ckc)}</div></div>`];
+  document.getElementById("kpis").innerHTML=(state.adv?tiles:tiles.slice(0,4)).join("");
 }
 function drawFlags(){
   const key=state.cur,w=wk(key),a=w.act,f=[];
@@ -1234,11 +1519,23 @@ function setAnchor(){
     ppy:+document.getElementById("aPPY").value||13};
   persist();render();
 }
+function toggleAdv(){
+  state.adv=!state.adv;persist();render();
+  if(state.adv)document.getElementById("advanced").scrollIntoView({behavior:"smooth",block:"start"});
+}
+// An empty dashboard and a genuine data gap used to look identical. This makes the difference loud.
 function drawFirstRun(){
-  const n=Object.keys(state.weeks).length;
-  document.getElementById("firstRun").innerHTML=n?"":
-    `<div class="alert i"><strong>Nothing stored yet.</strong> If there's a workbook in the shared Drive folder, hit
-     <em>Open workbook</em> up top. Otherwise just drop the three Toast exports below and start the history here.</div>`;
+  const loaded=dataKeys().length;
+  document.getElementById("firstRun").innerHTML=loaded?"":
+    `<div class="panel" style="border-color:var(--acc);text-align:center;padding:26px 18px">
+      <div style="font-size:17px;font-weight:700;margin-bottom:6px">No history loaded</div>
+      <div class="mini" style="max-width:560px;margin:0 auto 14px">
+        This browser has nothing stored. Any blank cell below means <em>nothing has been loaded yet</em> —
+        it does not mean Toast is missing data. Open the workbook from the shared Drive folder first,
+        then drop this week's exports.
+      </div>
+      <button class="pri" onclick="document.getElementById('loadjson').click()">Open workbook from Drive</button>
+    </div>`;
 }
 function render(){
   const A=state.anchor;
@@ -1253,8 +1550,12 @@ function render(){
      and today falls in <strong>${label(monday(iso(new Date())))}</strong>.
      <span class="warn">Confirm against the official fiscal calendar</span> — this was inferred from the sheet labels
      in the original spreadsheet, not from a published calendar.`;
-  drawFirstRun();drawNav();drawVar();drawKpis();drawFlags();
-  drawActuals();drawProj();drawNext();drawCovers();drawHist();
+  const adv=!!state.adv;
+  document.getElementById("advanced").style.display=adv?"":"none";
+  const ab=document.getElementById("advBtn");
+  ab.className="sm"+(adv?" pri":"");ab.textContent=adv?"Hide analysis":"Analysis";
+  drawFirstRun();drawNav();drawVar();drawKpis();drawFlags();drawActuals();drawNext();
+  if(adv){drawTrend();drawPeriod();drawProj();drawCovers();drawHist()}
 }
 
 /* ══════════ boot ══════════ */
@@ -1263,10 +1564,10 @@ function render(){
   state=saved?Object.assign(fresh(),saved):fresh();
   const dz=document.getElementById("drop"),fi=document.getElementById("csvin");
   dz.onclick=()=>fi.click();
-  fi.onchange=()=>{handleFiles(fi.files);fi.value=""};
+  fi.onchange=()=>{ingest(fi.files);fi.value=""};
   ["dragenter","dragover"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add("hot")}));
   ["dragleave","drop"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove("hot")}));
-  dz.addEventListener("drop",ev=>handleFiles(ev.dataTransfer.files));
+  dz.addEventListener("drop",ev=>ingest(ev.dataTransfer.files));
   document.body.addEventListener("dragover",e=>e.preventDefault());
   document.body.addEventListener("drop",e=>e.preventDefault());
   window.addEventListener("beforeunload",e=>{
