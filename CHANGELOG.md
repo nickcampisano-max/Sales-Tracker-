@@ -20,8 +20,19 @@ Four steps. Takes about a minute.
 4. **Save workbook** → put the file back in the shared Drive folder.
    **Export for Drive** gives you the `.xlsx` that people actually read.
 
-Setting next week's number is step 5, in section 4: type one weekly target, hit *Distribute*, adjust,
-then **Commit & lock**.
+Setting next week's number is step 5, in section 4. The weekly target box arrives **pre-filled with a
+suggestion and the arithmetic behind it** — last year's same week scaled by how recent weeks are tracking
+against their own year-ago weeks, or a trailing average when there's no usable week from last year.
+It is a suggestion. Type over it, hit *Distribute*, adjust any day directly, then **Commit & lock**.
+
+### Starting from scratch, or rebuilding
+
+You don't need a `.json` to begin. **Select every Toast CSV you have and drop them all at once.** Files are
+merged by bucket and each day is routed to its own week, so a year of exports in one drop rebuilds the
+whole history. Then *Save workbook* and that file becomes the record from then on.
+
+This is also the recovery path if a workbook is ever lost or corrupted — the CSVs are the source of truth,
+the `.json` is just a convenience.
 
 ---
 
@@ -137,7 +148,9 @@ Pages redeploys in a minute or two. Anyone with the page already open should rel
 
 Newest first. Dates are when the work landed, not when it was deployed.
 
-## 2026-08-09 — cut down to two views
+## 2026-08-09 — cut down, suggested targets, drop-the-folder
+
+**Simplified**
 
 - Default view reduced from nine sections to four: import, the week, projection vs actual, next week.
 - Everything else moved behind a single **Analysis** toggle. Nothing removed; hidden panels don't render
@@ -147,6 +160,36 @@ Newest first. Dates are when the work landed, not when it was deployed.
   both just blank cells. The page now says which it is, and blank cells carry a tooltip that distinguishes
   *"nothing loaded yet"* from *"no export has covered this day"*.
 - Week and actuals panels merged into one.
+
+**Suggested weekly target**
+
+- The target box now pre-fills with a suggested number and states how it was derived. Previously the
+  distributor produced the day-by-day *shape* but the weekly total had to be typed from nothing.
+- Preference order: last year's same week scaled by the trailing year-over-year ratio, then flat to last
+  year, then a trailing average — each labelled so the basis is never hidden.
+- Same guards as everywhere else: a year-ago week that is incomplete, or had a venue dark, is refused as
+  a basis rather than quietly used.
+- Prefill never overwrites a typed value, and every day can still be overridden by hand afterwards.
+
+**Import fixes** — all three found by dropping the entire CSV folder at once
+
+- A file whose name identifies no bucket is now sized against the *other files in the same drop*, not just
+  against stored history. Previously, dropping a full folder onto an empty page filed the one
+  ambiguously-named export into the wrong bucket. Resolution happens after the whole batch has loaded, so
+  file arrival order doesn't matter.
+- Dates covered by an export but returning no row are now recorded as closed. Previously they were skipped
+  entirely, which left holiday weeks permanently and wrongly marked incomplete.
+- Export coverage is now the span of dates the export *asked* for, not just the dates that carried an
+  amount. Rows present with a blank amount used to truncate the range and make trading days look uncovered.
+- Staged files re-preview after a workbook is loaded, instead of showing week labels computed against the
+  previous, often empty, history.
+
+**Found in the original spreadsheet**
+
+- One week is overstated: a single transaction was entered into two different buckets *and* into the typed
+  week total, so it counted more than once and was allocated to the wrong dayparts. The exports disagree
+  with that week's stated total, and the exports are correct. That week had been read as a large beat
+  against projection; part of the beat wasn't real.
 
 ## 2026-08 — comparisons and their guards
 
