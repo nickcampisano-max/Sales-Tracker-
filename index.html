@@ -181,7 +181,8 @@ ol.steps b{color:var(--tx)}
     <label class="f">Shape it from
       <select id="basis"></select></label>
     <button class="go" onclick="distribute()">Distribute across the week</button>
-    <span class="mini" id="basisNote" style="flex:1;min-width:200px"></span>
+    <button class="sm" id="sugBtn" onclick="useSuggestion()">Use suggested</button>
+    <span class="mini" id="basisNote" style="flex:1;min-width:220px"></span>
   </div>
   <div class="scroll"><div id="nextTable"></div></div>
   <div id="mixNote"></div>
@@ -401,6 +402,8 @@ function loadWorkbook(f,then){
         " from "+esc(f.name))}
     catch(e){alert("Couldn't read \""+f.name+"\" as a workbook.\n\nIt isn't a tracker .json file. If it's a Toast "+
       "export, it imported anyway — check the preview below.")}
+    // staged files were previewed against the old (often empty) history — redraw against what's now loaded
+    if(STAGE.length){drawStage();previewImport()}
     if(then)then()};
   rd.onerror=()=>{if(then)then()};
   rd.readAsText(f);
@@ -702,17 +705,32 @@ function guessBucketByName(name){
 }
 // Toast will happily hand you a file called "Sales by day.csv". Rather than defaulting it somewhere
 // plausible-looking, compare its per-open-day level against what each bucket has historically run.
-function guessBucketByLevel(parsed){
-  const ds=Object.keys(parsed).filter(d=>parsed[d].net>0);
-  if(ds.length<5)return null;
-  const avg=ds.reduce((s,d)=>s+parsed[d].net,0)/ds.length;
-  let best=null,bd=Infinity,second=Infinity;
+// Typical per-open-day level for each bucket, from stored history AND from any file in this same drop
+// that was identified by its name. The second source is what lets a whole folder be dropped at once
+// with one ambiguously-named file in it.
+function bucketLevels(skipName){
+  const lv={};
   BUCKETS.forEach(b=>{
     let s=0,n=0;
     dataKeys().forEach(k=>{const a=state.weeks[k].act;
       for(let i=0;i<7;i++)if(a.have[b.k][i]&&a[b.k][i]>0){s+=a[b.k][i];n++}});
-    if(n<14)return;
-    const d=Math.abs(Math.log(avg/(s/n)));
+    STAGE.forEach(e=>{
+      if(e.bucket!==b.k||e.how!=="name"||!e.parsed||e.name===skipName)return;
+      Object.keys(e.parsed).forEach(d=>{if(e.parsed[d].net>0){s+=e.parsed[d].net;n++}});
+    });
+    if(n>=14)lv[b.k]=s/n;
+  });
+  return lv;
+}
+function guessBucketByLevel(parsed,skipName){
+  const ds=Object.keys(parsed).filter(d=>parsed[d].net>0);
+  if(ds.length<5)return null;
+  const avg=ds.reduce((s,d)=>s+parsed[d].net,0)/ds.length;
+  const lv=bucketLevels(skipName);
+  let best=null,bd=Infinity,second=Infinity;
+  BUCKETS.forEach(b=>{
+    if(lv[b.k]==null)return;
+    const d=Math.abs(Math.log(avg/lv[b.k]));
     if(d<bd){second=bd;bd=d;best=b.k}else if(d<second)second=d;
   });
   // only trust it if the winner is clearly closer than the runner-up
@@ -1009,6 +1027,37 @@ function mixFrom(keys){
   }
   return{dayShare,bucketShare,n:nD,keys,shifts};
 }
+// Suggests the weekly total, showing its arithmetic. Prefers last year's same week scaled by how the
+// recent weeks are actually tracking against their own year-ago partners — that carries the seasonality
+// a flat average throws away. Falls back to a trailing average. Always overwritable.
+function suggestTarget(key){
+  const ly=addD(key,-364),lyw=state.weeks[ly];
+  const last4=completeWeeksBefore(key,4);
+  const avg4=last4.length?r2(last4.reduce((s,k)=>s+sum(totArr(state.weeks[k].act),0,6),0)/last4.length):0;
+  const recent=last4.length?state.weeks[last4[last4.length-1]].act:null;
+  const lyUsable=lyw&&complete(lyw)&&recent&&
+    !BUCKETS.some(b=>sum(lyw.act[b.k],0,6)===0&&sum(recent[b.k],0,6)>0);
+  if(lyUsable){
+    const lyTot=sum(totArr(lyw.act),0,6);
+    const pairs=last4.map(k=>{const p=state.weeks[addD(k,-364)];
+      if(!p||!complete(p))return null;
+      if(BUCKETS.some(b=>sum(p.act[b.k],0,6)===0&&sum(state.weeks[k].act[b.k],0,6)>0))return null;
+      const o=sum(totArr(p.act),0,6);
+      return o>0?{n:sum(totArr(state.weeks[k].act),0,6),o}:null}).filter(Boolean);
+    if(lyTot>0&&pairs.length>=2){
+      const ratio=pairs.reduce((s,x)=>s+x.n/x.o,0)/pairs.length;
+      return{v:Math.round(lyTot*ratio/100)*100,how:"yoy",lyTot,ratio,n:pairs.length,ly,avg4};
+    }
+    if(lyTot>0)return{v:Math.round(lyTot/100)*100,how:"lyflat",lyTot,ly,avg4};
+  }
+  if(avg4)return{v:Math.round(avg4/100)*100,how:"avg4",avg4,n:last4.length};
+  return null;
+}
+function useSuggestion(){
+  const s=suggestTarget(addD(state.cur,7));
+  if(!s){alert("Not enough complete history to suggest a number yet.");return}
+  document.getElementById("tgt").value=s.v;distribute();
+}
 function basisKeys(key){
   const b=state.basis;
   if(b==="yoy"){const k=addD(key,-364);return state.weeks[k]&&complete(state.weeks[k])?[k]:[]}
@@ -1025,10 +1074,18 @@ function drawBasis(){
   }).join("");
   sel.value=state.basis;
   sel.onchange=()=>{state.basis=sel.value;persist();render()};
-  const ks=basisKeys(key);
-  document.getElementById("basisNote").innerHTML=ks.length
-    ?`Using ${ks.map(label).join(", ")}. Enter a weekly target and it splits by the day mix those weeks actually ran.`
-    :`<span class="warn">No complete weeks to shape from yet.</span> Back-fill history from Toast, or type the days in directly.`;
+  const ks=basisKeys(key),s=suggestTarget(key),tgt=document.getElementById("tgt");
+  if(s&&!tgt.value)tgt.value=s.v;                       // prefill, never overwrite what's been typed
+  document.getElementById("sugBtn").style.display=s?"":"none";
+  const how=!s?"":
+    s.how==="yoy" ?`<strong>Suggested ${money(s.v)}</strong> — ${label(s.ly)} last year ran ${money(s.lyTot)}, and the last ${s.n} weeks are tracking ${((s.ratio-1)*100).toFixed(1)}% against their own year-ago weeks.`
+   :s.how==="lyflat"?`<strong>Suggested ${money(s.v)}</strong> — that's flat to ${label(s.ly)} last year. Not enough clean year-ago pairs to measure a trend yet.`
+   :`<strong>Suggested ${money(s.v)}</strong> — the average of the last ${s.n} complete week${s.n===1?"":"s"}. No usable week from last year, so there's no seasonality in this number.`;
+  document.getElementById("basisNote").innerHTML=
+    (how?how+"<br>":"")+
+    (ks.length
+      ?`<span class="dim">Split across days by the mix from ${ks.map(label).join(", ")}. Change the target and hit Distribute, or type any cell below directly.</span>`
+      :`<span class="warn">No complete weeks to shape from yet.</span> Load the workbook, or type the days in directly.`);
 }
 function distribute(){
   const key=addD(state.cur,7),t=num(document.getElementById("tgt").value);
