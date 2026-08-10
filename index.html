@@ -753,27 +753,34 @@ function handleFiles(files){
       const e={name:f.name,bucket:byName||"pm",headers:p.headers,rows:p.data,map,
                how:byName?"name":"none"};
       reparse(e);
-      if(!byName){                       // filename told us nothing — try the sales level
-        const lvl=guessBucketByLevel(e.parsed);
-        if(lvl){e.bucket=lvl.k;e.how="level";e.lvl=lvl}
-      }
       STAGE=STAGE.filter(x=>x.name!==e.name);STAGE.push(e);
-      if(++done===list.length){drawStage();previewImport()}
+      // Resolve unnamed files only once the whole batch has landed, so the files that DID identify
+      // themselves are available as reference levels regardless of what order they finished reading in.
+      if(++done===list.length){
+        STAGE.filter(x=>x.how==="none").forEach(x=>{
+          const lvl=guessBucketByLevel(x.parsed,x.name);
+          if(lvl){x.bucket=lvl.k;x.how="level";x.lvl=lvl}
+        });
+        drawStage();previewImport();
+      }
     };
     rd.readAsText(f)});
 }
 function reparse(e){
-  const parsed={};let bad=0;
+  const parsed={};let bad=0,lo=null,hi=null;
   e.rows.forEach(r=>{
-    const d=parseDate(r[e.map.date]),n=num(r[e.map.net]);
+    const d=parseDate(r[e.map.date]);
+    // Coverage is the span of dates the export ASKED for, not just the ones that carried money.
+    // A row with a readable date but a blank amount still proves the export covered that day.
+    if(d){if(!lo||d<lo)lo=d; if(!hi||d>hi)hi=d}
+    const n=num(r[e.map.net]);
     if(!d||n==null){bad++;return}
     const o=parsed[d]||(parsed[d]={net:0,ord:0,gst:0});
     o.net=r2(o.net+n);
     o.ord+=e.map.ord?(num(r[e.map.ord])||0):0;
     o.gst+=e.map.gst?(num(r[e.map.gst])||0):0;
   });
-  const ks=Object.keys(parsed).sort();
-  e.parsed=parsed;e.bad=bad;e.min=ks[0]||null;e.max=ks[ks.length-1]||null;
+  e.parsed=parsed;e.bad=bad;e.min=lo;e.max=hi;
 }
 function setBucket(i,v){STAGE[i].bucket=v;STAGE[i].how="manual";drawStage();previewImport()}
 function setCol(i,k,v){STAGE[i].map[k]=v;reparse(STAGE[i]);drawStage();previewImport()}
@@ -806,6 +813,15 @@ function drawStage(){
 function buildImport(){
   const dates=new Set(),warn=[],byB={};
   STAGE.forEach(e=>Object.keys(e.parsed).forEach(d=>dates.add(d)));
+  // Walk every date the exports covered, not only the ones that produced a row. A day the export
+  // asked for and Toast returned nothing for is a closed day — it has to be recorded as zero, or it
+  // silently leaves the week looking incomplete forever. Thanksgiving and Christmas are exactly this.
+  (()=>{
+    let lo=null,hi=null;
+    STAGE.forEach(e=>{if(!e.min)return;if(!lo||e.min<lo)lo=e.min;if(!hi||e.max>hi)hi=e.max});
+    if(!lo)return;
+    for(let d=lo;d<=hi;d=addD(d,1))dates.add(d);
+  })();
   BUCKETS.forEach(b=>byB[b.k]=STAGE.filter(e=>e.bucket===b.k));
   BUCKETS.forEach(b=>{
     if(!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
