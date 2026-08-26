@@ -100,17 +100,18 @@ ol.steps b{color:var(--tx)}
   <div class="row">
     <button class="pri" onclick="document.getElementById('loadjson').click()">Open workbook</button>
     <input type="file" id="loadjson" accept=".json,.csv,.tsv,.txt" multiple style="display:none" onchange="loadFile(this)">
-    <button onclick="saveFile()">Save workbook</button>
+    <button class="hideInReview" onclick="saveFile()">Save workbook</button>
     <button onclick="exportXlsx()">Export for Drive</button>
     <button class="sm" id="advBtn" onclick="toggleAdv()">Analysis</button>
   </div>
 </div>
 
+<div id="reviewBar"></div>
 <div id="dirtyBar"></div>
 <div id="firstRun"></div>
 
 <!-- ═══ 1 IMPORT ═══ -->
-<div class="panel">
+<div class="panel hideInReview">
   <h2>1 &middot; Drop the Toast exports</h2>
   <div class="mini" style="margin-bottom:9px">
     Toast &rarr; <em>Sales by day</em>, one export per bucket:
@@ -168,14 +169,14 @@ ol.steps b{color:var(--tx)}
 <div class="panel">
   <div class="row" style="justify-content:space-between">
     <h2 style="margin:0">4 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
-    <div class="row">
+    <div class="row hideInReview">
       <button class="sm" onclick="seedNext('proj')">Copy this projection</button>
       <button class="sm" onclick="seedNext('act')">Copy this actual</button>
       <button class="pri sm" onclick="commitNext()">Commit &amp; lock</button>
     </div>
   </div>
   <div class="mini" style="margin:6px 0 9px" id="nextNote"></div>
-  <div class="row" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:11px">
+  <div class="row hideInReview" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:11px">
     <label class="f">Weekly net target
       <input type="text" id="tgt" placeholder="e.g. 52000" style="width:120px"></label>
     <label class="f">Shape it from
@@ -268,6 +269,14 @@ ol.steps b{color:var(--tx)}
     <div class="mini" style="margin-top:9px" id="anchorNote"></div>
     <div class="hr"></div>
     <div class="row">
+      <label class="f">This browser is for
+        <select id="roleSel" onchange="setRole(this.value)">
+          <option value="input">Inputting — can import and save</option>
+          <option value="review">Review only — cannot change the file</option>
+        </select></label>
+      <label class="f">Whose machine is this
+        <input type="text" id="whoIn" placeholder="e.g. Gary" style="width:130px"
+          oninput="setWho(this.value)"></label>
       <label class="f" style="flex-direction:row;align-items:center;gap:7px">
         <input type="checkbox" id="cents" onchange="state.cents=this.checked;render()"> <span>Show cents</span></label>
       <label class="f" style="flex-direction:row;align-items:center;gap:7px">
@@ -342,7 +351,14 @@ function blankWeek(key){return{key,
        ord:{am:Z(),pm:Z(),atp:Z()},gst:{am:Z(),pm:Z(),atp:Z()},src:"manual",at:null}}}
 function wk(key){if(!state.weeks[key])state.weeks[key]=blankWeek(key);return state.weeks[key]}
 function fresh(){return{anchor:{period:8,week:1,start:"2026-07-06",wpp:4,ppy:13},
-  cur:monday(iso(new Date())),through:"full",cents:false,basis:"4",weeks:{}}}
+  cur:monday(iso(new Date())),through:"full",cents:false,basis:"4",weeks:{},
+  rev:0,savedBy:""}}
+// Per-browser, deliberately NOT stored in the workbook: who this machine belongs to, and whether it may write.
+const who=()=>localStorage.getItem(LSK+"_who")||"";
+const role=()=>localStorage.getItem(LSK+"_role")||"input";
+const readOnly=()=>role()==="review";
+function setWho(v){localStorage.setItem(LSK+"_who",v.trim())}
+function setRole(v){localStorage.setItem(LSK+"_role",v);render()}
 const tot=(a,i)=>r2((a.am[i]||0)+(a.pm[i]||0)+(a.atp[i]||0));
 const totArr=a=>[0,1,2,3,4,5,6].map(i=>tot(a,i));
 const anyHave=(a,i)=>!!(a.have.am[i]||a.have.pm[i]||a.have.atp[i]);
@@ -378,6 +394,7 @@ let dirty=false;
 function persist(){pruneEmpty();try{localStorage.setItem(LSK,JSON.stringify(state))}catch(e){}dirty=true;drawDirty()}
 function drawDirty(){
   const el=document.getElementById("dirtyBar");if(!el)return;
+  if(readOnly()){el.innerHTML="";return}   // the review banner already explains this machine's state
   el.innerHTML=dirty
     ?`<div class="alert b"><strong>Not saved to a file yet.</strong> The browser copy is a buffer and won't survive
        clearing history or moving machines. <button class="pri sm" style="margin-left:8px" onclick="saveFile()">Save workbook now</button></div>`
@@ -387,7 +404,10 @@ function restore(){try{const s=localStorage.getItem(LSK);if(s){const p=JSON.pars
 function dl(name,blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download=name;document.body.appendChild(a);a.click();a.remove()}
 function saveFile(auto){
+  if(readOnly()){say("This browser is set to <strong>review only</strong>, so saving is off — it can't overwrite the input machine's file.");return}
   state.savedAt=new Date().toISOString().slice(0,16).replace("T"," ");
+  state.rev=(+state.rev||0)+1;
+  state.savedBy=who()||"unnamed";
   const clean=cleanState(),n=Object.keys(clean.weeks).length;
   dl("CKC-ATP tracker "+state.cur+".json",new Blob([JSON.stringify(clean,null,1)],{type:"application/json"}));
   persist();dirty=false;drawDirty();
@@ -397,9 +417,16 @@ function saveFile(auto){
 function loadWorkbook(f,then){
   const rd=new FileReader();
   rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!p.weeks)throw 0;
+    // Revision check — the one thing that stops two people quietly overwriting each other.
+    const mine=+((state&&state.rev)||0),theirs=+(p.rev||0);
+    if(mine>theirs&&dataKeys().length&&!readOnly()&&
+       !confirm(`The file you're opening is OLDER than what this browser already holds.\n\n`+
+         `  this browser: revision ${mine}${state.savedBy?" (last saved by "+state.savedBy+")":""}\n`+
+         `  that file:    revision ${theirs}${p.savedBy?" (saved by "+p.savedBy+")":""}\n\n`+
+         `Opening it will replace the newer data on this machine. Continue?`))return;
     state=Object.assign(fresh(),p);persist();dirty=false;render();
     say("Loaded "+Object.keys(state.weeks).length+" week"+(Object.keys(state.weeks).length===1?"":"s")+
-        " from "+esc(f.name))}
+        " from "+esc(f.name)+(p.savedBy?` · saved by ${esc(p.savedBy)}`:"")+(p.rev?` · rev ${p.rev}`:""))}
     catch(e){alert("Couldn't read \""+f.name+"\" as a workbook.\n\nIt isn't a tracker .json file. If it's a Toast "+
       "export, it imported anyway — check the preview below.")}
     // staged files were previewed against the old (often empty) history — redraw against what's now loaded
@@ -810,18 +837,35 @@ function drawStage(){
       <button class="sm danger" onclick="dropStage(${i})">remove</button>
     </div>`}).join("");
 }
+// Weekdays a venue is reliably dark, learned from stored history rather than configured.
+// Toast omits closed days entirely, so a Mon–Sun export for a venue shut on Mondays begins on Tuesday —
+// which used to read as "Monday was never exported". Self-corrects: one trading Monday and the rule lapses.
+function closedDows(){
+  const out={};
+  BUCKETS.forEach(b=>{
+    out[b.k]=[];
+    for(let i=0;i<7;i++){
+      let dark=0,lit=0;
+      dataKeys().forEach(k=>{const a=state.weeks[k].act;
+        if(!a.have[b.k][i])return;
+        a[b.k][i]>0?lit++:dark++});
+      // tolerate the odd private event — ATP has traded 2 Mondays in 14 months and is still shut Mondays.
+      // Only fills dates absent from the export; a Monday that genuinely traded arrives as a row and wins.
+      if(dark>=8&&lit<=Math.max(1,(dark+lit)*0.1))out[b.k].push(i);
+    }
+  });
+  return out;
+}
 function buildImport(){
   const dates=new Set(),warn=[],byB={};
+  const CD=closedDows();
   STAGE.forEach(e=>Object.keys(e.parsed).forEach(d=>dates.add(d)));
   // Walk every date the exports covered, not only the ones that produced a row. A day the export
   // asked for and Toast returned nothing for is a closed day — it has to be recorded as zero, or it
   // silently leaves the week looking incomplete forever. Thanksgiving and Christmas are exactly this.
-  (()=>{
-    let lo=null,hi=null;
-    STAGE.forEach(e=>{if(!e.min)return;if(!lo||e.min<lo)lo=e.min;if(!hi||e.max>hi)hi=e.max});
-    if(!lo)return;
-    for(let d=lo;d<=hi;d=addD(d,1))dates.add(d);
-  })();
+  let lo=null,hi=null;
+  STAGE.forEach(e=>{if(!e.min)return;if(!lo||e.min<lo)lo=e.min;if(!hi||e.max>hi)hi=e.max});
+  if(lo)for(let d=lo;d<=hi;d=addD(d,1))dates.add(d);
   BUCKETS.forEach(b=>byB[b.k]=STAGE.filter(e=>e.bucket===b.k));
   BUCKETS.forEach(b=>{
     if(!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
@@ -834,7 +878,11 @@ function buildImport(){
       if(!fs.length){o.cells[b.k]={st:"nofile"};return}
       const hit=fs.find(e=>e.parsed[d]);
       if(hit){o.cells[b.k]={st:"val",...hit.parsed[d]};return}
-      o.cells[b.k]=fs.some(e=>e.min&&d>=e.min&&d<=e.max)?{st:"closed",net:0,ord:0,gst:0}:{st:"outside"};
+      if(fs.some(e=>e.min&&d>=e.min&&d<=e.max)){o.cells[b.k]={st:"closed",net:0,ord:0,gst:0};return}
+      // inside the overall drop, on a weekday this venue is never open → closed, not uncovered
+      if(lo&&d>=lo&&d<=hi&&(CD[b.k]||[]).includes(dow(d))){
+        o.cells[b.k]={st:"closed",net:0,ord:0,gst:0,bySchedule:true};return}
+      o.cells[b.k]={st:"outside"};
     });
     o.total=BUCKETS.reduce((t,b)=>t+(o.cells[b.k].net||0),0);
     o.full=BUCKETS.every(b=>o.cells[b.k].st==="val"||o.cells[b.k].st==="closed");
@@ -933,7 +981,7 @@ function inRow(name,arr,cb,sw,haveArr){
                    :"Nothing is loaded in this browser — open the workbook from Drive first.")
         :(haveArr&&v===0?"The export covered this day and Toast reported no sales (closed).":"");
       return `<td><input class="cellin" type="text" value="${blank?"":(v?r2(v):"0")}"
-        placeholder="${blank?"—":""}"${why?` title="${esc(why)}"`:""}
+        placeholder="${blank?"—":""}"${why?` title="${esc(why)}"`:""}${readOnly()?" disabled":""}
         onchange="${cb}(${i},this.value)" onfocus="this.select()"></td>`}).join("")+
     `<td class="num total-col">${money(sum(arr,0,6))}</td></tr>`;
 }
@@ -1623,6 +1671,17 @@ function render(){
      and today falls in <strong>${label(monday(iso(new Date())))}</strong>.
      <span class="warn">Confirm against the official fiscal calendar</span> — this was inferred from the sheet labels
      in the original spreadsheet, not from a published calendar.`;
+  document.getElementById("roleSel").value=role();
+  document.getElementById("whoIn").value=who();
+  // Review mode: import and save are removed rather than merely discouraged, so a reviewing
+  // machine cannot produce a file that competes with the input machine's.
+  const ro=readOnly();
+  document.querySelectorAll(".hideInReview").forEach(el=>el.style.display=ro?"none":"");
+  document.getElementById("reviewBar").innerHTML=ro
+    ?`<div class="alert i"><strong>Review only.</strong> Import and save are switched off on this browser, so
+       nothing here can overwrite ${esc(state.savedBy||"the input machine")}'s file. Open the latest workbook from
+       Drive to see current numbers${state.rev?` — you're on revision ${state.rev}${state.savedBy?", saved by "+esc(state.savedBy):""}`:""}.
+       Change this in Settings.</div>`:"";
   const adv=!!state.adv;
   document.getElementById("advanced").style.display=adv?"":"none";
   const ab=document.getElementById("advBtn");

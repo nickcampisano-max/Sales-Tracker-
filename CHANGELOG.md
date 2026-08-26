@@ -36,6 +36,42 @@ the `.json` is just a convenience.
 
 ---
 
+## Handing over to someone else
+
+The whole history is one `.json`. That file is the only thing that changes hands.
+
+Do it at a period boundary so the new person starts on week 1 of a fresh period.
+
+**Outgoing person, in order:**
+
+1. Import the final week of the period and check no day is marked *partial*. A gap left now is inherited
+   permanently — go pull the missing bucket first.
+2. Set and **Commit & lock** the projection for the incoming person's first week, so their first job is
+   purely importing actuals.
+3. **Save workbook.** Confirm the red "not saved" bar is gone. This file is the handoff.
+4. Put it in the shared Drive folder.
+5. **Settings → This browser is for → Review only.** Do this before they start. Two machines set to
+   *Inputting* is the one way to lose a week's work.
+
+**Incoming person, once:**
+
+1. Open the URL and bookmark it.
+2. **Settings → Inputting**, and put your name in. Every save is stamped with it from then on.
+3. **Open workbook** → the `.json` from Drive. Check the week count looks right.
+4. Do one supervised run end to end before you're on your own.
+
+**From then on**
+
+The incoming person's browser is the live copy. The outgoing person's goes stale the moment the first new
+week is saved, silently — so re-open the latest file from Drive whenever you want current numbers, rather
+than trusting what's on screen.
+
+If you ever open a workbook that is *older* than what your browser already holds, you'll be warned and told
+both revision numbers. Read it before clicking through: it means someone else has saved more recently than
+the file you picked.
+
+---
+
 ## The three exports
 
 Toast → **Sales by day**, one export per bucket. The time window is applied in Toast *before* exporting.
