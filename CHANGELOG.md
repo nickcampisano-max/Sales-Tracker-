@@ -14,7 +14,9 @@ Four steps. Takes about a minute.
 1. **Open workbook** → pick the latest `.json` from the shared Drive folder.
    If the page says *"No history loaded"*, this step has not been done yet — don't skip it, or you'll
    save a file containing only this week and lose the history.
-2. **Drop the three Toast exports** onto the page. All three at once is fine.
+2. **Drop the week's exports** onto the page — all at once is fine:
+   the three *Sales by day* exports, the **Toast payroll export for that one week**, and the
+   **7shifts schedule** for that week. Five files. The page works out what each one is from its columns.
 3. **Check the preview, then write them in.** Anything that overwrites a number already stored is
    reported before and after.
 4. **Save workbook** → put the file back in the shared Drive folder.
@@ -72,7 +74,9 @@ the file you picked.
 
 ---
 
-## The three exports
+## The exports
+
+### Sales — three files
 
 Toast → **Sales by day**, one export per bucket. The time window is applied in Toast *before* exporting.
 
@@ -96,6 +100,25 @@ bucket yourself from the dropdown before writing it in.
 
 ---
 
+### Labor — two files
+
+| Export | Gives | Pulled for |
+|---|---|---|
+| Toast payroll export | actual hours, overtime, pay, by employee and job code | **one week at a time** |
+| 7shifts schedule | posted hours per person | one week per file |
+
+**The payroll export carries no dates inside it.** It is one row per employee per job code for whatever
+range you asked Toast for. So the week has to come from somewhere else — the page reads it from the
+filename (`PayrollExport_2026_09_21-2026_09_27`), and there's a date box on the file card if the name
+doesn't carry one.
+
+**A payroll export covering more than about a week is refused**, and says so. There is no honest way to
+split one lump of hours across several weeks, so the page won't pretend.
+
+**Part-week pulls are supported and useful.** Pull Monday to Wednesday and the filename says so; labor is
+then measured against Monday to Wednesday of sales and the figure is labelled *to date*. That's how you
+check mid-week without waiting for Sunday.
+
 ## Where the data lives
 
 **In the Drive folder, not in this repo.** The `.json` workbook is the record.
@@ -105,8 +128,12 @@ bucket yourself from the dropdown before writing it in.
 - The browser also keeps a working copy so a crash or a refresh doesn't lose the day. It is a buffer only —
   it does not survive clearing the browser or moving to another machine. **The file in Drive wins.**
 
-> **Never commit sales data to this repo.** GitHub Pages sites are public even when the repository is
-> private. No `.json`, no Toast CSVs. Code only.
+> **Never commit data to this repo.** GitHub Pages sites are public even when the repository is private.
+> No `.json`, no Toast CSVs, no 7shifts exports. Code only.
+>
+> This matters more since labor arrived. Sales data is commercially sensitive; **labor data is people data**
+> — names, hours and pay rates. Whoever can open the Drive folder can now see what everyone earns, which is
+> a narrower group than the one that may see weekly sales. Worth checking that folder's sharing.
 
 ---
 
@@ -140,6 +167,31 @@ completely fake percentage. Those are withheld instead of printed.
 | `0` | genuinely zero |
 
 ---
+
+## Reading the labor panel
+
+**Everything there is hourly labor.** Salaried staff show $0.00 in Toast's hourly reports, so they are not
+in the dollars and not in labor %. The figure matches the target because the target is a blended hourly
+number — but say "hourly labor", not "labor", or someone will act on a number that's missing people.
+
+**Each section is divided by its own sales.** BOH and FOH/Bar against CKC sales; the two ATP sections
+against ATP sales. A single blended percentage would hide which side of the business is heavy.
+
+**Pooled tip logins are stripped out.** Shared accounts carry hours with no dollars behind them. Left in,
+they drag labor % per hour the wrong way and produce meaningless overtime flags. The panel says how many
+hours it removed rather than quietly dropping them.
+
+**Posted vs actual is per person, and the dollars use a weighted rate** — each person's total pay divided
+by their total hours, not the highest rate on any job code they hold. Someone carrying a manager code for a
+few hours a week is not a manager-rate employee, and costing their variance that way overstates it badly.
+
+**Salaried people appear in the variance table but with no dollars**, labelled. Their posted hours are real
+and their Toast hours aren't paid hours, so the hours gap is worth seeing and the dollar figure would be a
+fiction.
+
+**Names that don't match between the two systems are listed, never dropped.** Toast writes `Last, First`;
+7shifts writes `First Last`; suffixes and nicknames differ. The page normalises what it can and tells you
+about the rest, because a silently dropped employee is an invisible error.
 
 ## The two views
 
@@ -175,6 +227,8 @@ index.html      the whole application
 CHANGELOG.md    this file
 ```
 
+Still two files. The labor work added no dependencies and no data to the repo.
+
 That is the entire repo, and it should stay that way. To update, replace `index.html` and push; GitHub
 Pages redeploys in a minute or two. Anyone with the page already open should reload.
 
@@ -183,6 +237,38 @@ Pages redeploys in a minute or two. Anyone with the page already open should rel
 # Change history
 
 Newest first. Dates are when the work landed, not when it was deployed.
+
+## 2026-10-01 — labor
+
+- **New section 4, Labor**, in the default view. Labor % against target; hours, dollars and overtime by
+  section — BOH, FOH/Bar, ATP BOH, ATP Bar — each divided by its own sales; and posted-vs-actual hours per
+  person with the dollar value of the gap.
+- Two new file types, detected by their columns rather than a dropdown: the Toast payroll export and the
+  7shifts weekly schedule. The week comes from the filename, with a manual date box as the fallback.
+- **Multi-week payroll exports are refused.** That file has no dates inside it; splitting one across weeks
+  would be invention.
+- **Day-to-date labor.** A part-week payroll pull is measured against the matching part-week of sales and
+  labelled as such. An incomplete day *inside* the window withholds the percentage; an incomplete day
+  outside it doesn't.
+- Pooled tip logins excluded by job code, with the removed hours reported.
+- Variance dollars use a weighted average rate per person rather than their highest job code — this was
+  overstating one person's variance by 44% before it was caught.
+- Salaried staff excluded from dollar variance and labelled; cross-system name mismatches surfaced.
+- Fixed: a week holding only labor and no sales was being pruned away as empty.
+
+## 2026-08-10 — two machines, one record
+
+- **Review mode.** Each browser is set to *Inputting* or *Review only* in Settings. A review machine loses
+  the import panel and the save button and its cells go read-only, so it cannot produce a file that competes
+  with the input machine's. The setting lives in the browser and never travels inside the workbook.
+- **Revision counter.** Every save increments a number and records who saved it. Opening a workbook *older*
+  than what the browser already holds now stops and shows both revisions before overwriting. A newer file
+  loads silently — only the dangerous direction interrupts.
+- **ATP Monday.** Toast omits closed days entirely, so a Mon–Sun export for a venue shut on Mondays begins
+  on Tuesday, and Monday was being flagged as "never exported" every single week. The page now learns which
+  weekdays a venue is reliably dark from the stored history and records those days as closed. It tolerates
+  the occasional private event, and the rule lapses by itself if the venue starts opening that day.
+- Sections renumbered as Labor was added.
 
 ## 2026-08-09 — cut down, suggested targets, drop-the-folder
 

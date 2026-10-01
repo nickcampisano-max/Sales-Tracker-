@@ -165,10 +165,26 @@ ol.steps b{color:var(--tx)}
   <div class="scroll"><div id="varTable"></div></div>
 </div>
 
-<!-- ═══ 4 NEXT WEEK ═══ -->
+<!-- ═══ 4 LABOR ═══ -->
 <div class="panel">
   <div class="row" style="justify-content:space-between">
-    <h2 style="margin:0">4 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
+    <h2 style="margin:0">4 &middot; Labor</h2>
+    <span id="labSrc"></span>
+  </div>
+  <div class="mini" id="labNote" style="margin:6px 0 10px"></div>
+  <div class="grid2" id="labKpis" style="margin-bottom:12px"></div>
+  <div class="scroll"><div id="labSections"></div></div>
+  <div style="margin-top:13px"><div class="row" style="justify-content:space-between">
+    <h2 style="margin:0;font-size:12px">Posted vs actual, by person</h2>
+    <span class="mini" id="labVarNote"></span></div>
+    <div class="scroll" style="margin-top:7px"><div id="labVar"></div></div></div>
+  <div id="labWhy"></div>
+</div>
+
+<!-- ═══ 5 NEXT WEEK ═══ -->
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">5 &middot; Next week &mdash; <span id="nextLbl"></span></h2>
     <div class="row hideInReview">
       <button class="sm" onclick="seedNext('proj')">Copy this projection</button>
       <button class="sm" onclick="seedNext('act')">Copy this actual</button>
@@ -242,11 +258,11 @@ ol.steps b{color:var(--tx)}
   <summary><strong>How this runs each week</strong></summary>
   <ol class="steps">
     <li><b>Open workbook</b> and pick the latest <code>.json</code> from the shared Drive folder. Skip it if the browser
-      already remembers &mdash; the badge in section 4 tells you.</li>
+      already remembers &mdash; the badge in section 2 tells you.</li>
     <li>Pull the three <em>Sales by day</em> exports from Toast and <b>drop all three at once</b>. Same date range on all
       three, or days will come in partial.</li>
     <li>Check the preview, then <b>write them in</b>. Anything that overwrites an existing number is reported.</li>
-    <li>Set next week's target in section 6 and <b>Commit &amp; lock</b> it.</li>
+    <li>Set next week's target in section 5 and <b>Commit &amp; lock</b> it.</li>
     <li><b>Save workbook</b> and <b>Export for Drive</b>, then put both files in the shared folder. The <code>.json</code>
       is what the tool reads next week; the <code>.xlsx</code> is the one people read.</li>
   </ol>
@@ -277,6 +293,9 @@ ol.steps b{color:var(--tx)}
       <label class="f">Whose machine is this
         <input type="text" id="whoIn" placeholder="e.g. Gary" style="width:130px"
           oninput="setWho(this.value)"></label>
+      <label class="f">Labor target %
+        <input type="number" id="labTgt" step="0.5" style="width:80px"
+          onchange="state.laborTarget=+this.value||23;persist();render()"></label>
       <label class="f" style="flex-direction:row;align-items:center;gap:7px">
         <input type="checkbox" id="cents" onchange="state.cents=this.checked;render()"> <span>Show cents</span></label>
       <label class="f" style="flex-direction:row;align-items:center;gap:7px">
@@ -366,8 +385,10 @@ const allHave=(a,i)=>!!(a.have.am[i]&&a.have.pm[i]&&a.have.atp[i]);
 const complete=w=>[0,1,2,3,4,5,6].every(i=>allHave(w.act,i));
 const daysComplete=w=>[0,1,2,3,4,5,6].filter(i=>allHave(w.act,i)).length;
 // Rendering touches next week, which would otherwise litter storage and every export with blank weeks.
+const hasLab=w=>!!(w.lab&&((w.lab.rows&&w.lab.rows.length)||(w.lab.sched&&Object.keys(w.lab.sched).length)));
 const hasAny=w=>[0,1,2,3,4,5,6].some(i=>anyHave(w.act,i))||
-  sum(w.proj.cur.am,0,6)+sum(w.proj.cur.pm,0,6)+sum(w.proj.cur.atp,0,6)>0;
+  sum(w.proj.cur.am,0,6)+sum(w.proj.cur.pm,0,6)+sum(w.proj.cur.atp,0,6)>0||
+  hasLab(w);   // a week carrying only labor is still a real week — don't prune it away
 function pruneEmpty(){Object.keys(state.weeks).forEach(k=>{
   if(k!==state.cur&&!hasAny(state.weeks[k]))delete state.weeks[k]})}
 // render() touches next week every pass, so pruning alone can't hold. Anything that enumerates or
@@ -765,6 +786,110 @@ function guessBucketByLevel(parsed,skipName){
 }
 function guessBucket(name){return guessBucketByName(name)||"pm"}
 
+/* ══════════ labor ══════════
+   Two more exports: Toast payroll (actual hours and pay) and the 7shifts weekly schedule (posted hours).
+   Neither carries a usable date inside the file, so the week comes from the filename or is set by hand. */
+const LSEC=["BOH","FOH/Bar","ATP BOH","ATP Bar"];
+function defaultJobMap(){return{
+  "Line Cook":"BOH","Prep Cook":"BOH","Dishwasher":"BOH","Chef":"BOH",
+  "Server":"FOH/Bar","Bartender":"FOH/Bar","Busser":"FOH/Bar","Greeter":"FOH/Bar","Barback":"FOH/Bar",
+  "Bar Prep":"FOH/Bar","Bar Manager":"FOH/Bar","Bar Admin":"FOH/Bar","Hourly Manager":"FOH/Bar",
+  "Training - Server/Bar":"FOH/Bar","Training - Support":"FOH/Bar","Trainer - Server/Bar":"FOH/Bar",
+  "ATP Sushi Chef":"ATP BOH",
+  "ATP Bartender":"ATP Bar","ATP Bar Manager":"ATP Bar","ATP Greeter":"ATP Bar",
+  // pooled tip logins — hours with no dollars behind them. Excluded from everything.
+  "Ghost Bar":"","Ghost Server":"","ATP Bar":"","Delivery Service Driver":""};}
+const jobMap=()=>state.jobMap||(state.jobMap=defaultJobMap());
+// Toast writes "Last, First"; 7shifts writes "First Last", and the two disagree about suffixes.
+function normName(s){
+  s=String(s||"").trim().replace(/"/g,"");
+  if(s.includes(",")){const p=s.split(",");s=p[1].trim()+" "+p[0].trim()}
+  return s.toLowerCase().replace(/\./g,"")
+    .replace(/\b(jr|sr|ii|iii|fo|ckc)\b/g,"").replace(/\s+/g," ").trim();
+}
+function weekFromName(n){
+  let m=n.match(/(\d{4})[-_](\d{1,2})[-_](\d{1,2})\s*-\s*(\d{4})[-_](\d{1,2})[-_](\d{1,2})/);
+  if(m){const a=`${m[1]}-${p2(m[2])}-${p2(m[3])}`,b=`${m[4]}-${p2(m[5])}-${p2(m[6])}`;
+    return{start:a,end:b,days:Math.round((mk(b)-mk(a))/86400000)+1}}
+  m=n.match(/(\d{4})[-_](\d{1,2})[-_](\d{1,2})/);
+  if(m){const a=`${m[1]}-${p2(m[2])}-${p2(m[3])}`;return{start:a,end:addD(a,6),days:7}}
+  return null;
+}
+function parsePayroll(rows){
+  const out=[];
+  rows.forEach(r=>{
+    const emp=(r["Employee"]||"").trim().replace(/^"|"$/g,""),job=(r["Job Title"]||"").trim();
+    if(!emp||!job)return;
+    out.push({emp,job,rh:num(r["Regular Hours"])||0,oth:num(r["Overtime Hours"])||0,
+      rate:num(r["Hourly Rate"])||0,pay:num(r["Total Pay"])||0,otPay:num(r["Overtime Pay"])||0});
+  });
+  return out;
+}
+function parseSched(rows){
+  const out={};
+  rows.forEach(r=>{
+    const n=(r["Name"]||"").trim().replace(/^"|"$/g,"");
+    if(!n||/^salary\b/i.test(n))return;          // 7shifts emits department header rows
+    const h=num(r["Payable Hours"]);
+    if(h==null)return;
+    out[n]=r2((out[n]||0)+h);
+  });
+  return out;
+}
+function laborFor(key){
+  const w=wk(key),L=w.lab;
+  if(!L||!(L.rows&&L.rows.length)&&!(L.sched&&Object.keys(L.sched).length))return null;
+  const map=jobMap(),rows=L.rows||[],sched=L.sched||{};
+  const sec={},unmapped={},excl={hrs:0,titles:{}};
+  LSEC.forEach(s=>sec[s]={hrs:0,pay:0,ot:0,otPay:0});
+  rows.forEach(r=>{
+    const s=map[r.job];
+    if(s===undefined){unmapped[r.job]=r2((unmapped[r.job]||0)+r.rh+r.oth);return}
+    if(s===""){excl.hrs=r2(excl.hrs+r.rh+r.oth);excl.titles[r.job]=r2((excl.titles[r.job]||0)+r.rh+r.oth);return}
+    sec[s].hrs=r2(sec[s].hrs+r.rh+r.oth);sec[s].pay=r2(sec[s].pay+r.pay);
+    sec[s].ot=r2(sec[s].ot+r.oth);sec[s].otPay=r2(sec[s].otPay+r.otPay);
+  });
+  // denominators: BOH and FOH/Bar divide into CKC sales, the ATP sections into ATP sales
+  const a=w.act;
+  const d0=(L.days&&L.days.from!=null)?L.days.from:0, d1=(L.days&&L.days.to!=null)?L.days.to:6;
+  const partial=!(d0===0&&d1===6);
+  // only the days the payroll actually covers, and they must be complete on the sales side
+  let full=true;for(let i=d0;i<=d1;i++)if(!allHave(a,i))full=false;
+  const ckc=r2(sum(a.am,d0,d1)+sum(a.pm,d0,d1)),atp=sum(a.atp,d0,d1),tot=r2(ckc+atp);
+  const den={"BOH":ckc,"FOH/Bar":ckc,"ATP BOH":atp,"ATP Bar":atp};
+  const totHrs=r2(LSEC.reduce((x,s)=>x+sec[s].hrs,0)),totPay=r2(LSEC.reduce((x,s)=>x+sec[s].pay,0));
+  // per person: actual (counted hours only) vs posted
+  const act={},ot={},empPay={},rate={};
+  rows.forEach(r=>{
+    if(map[r.job]==="")return;                  // pooled logins are not people
+    act[r.emp]=r2((act[r.emp]||0)+r.rh+r.oth);
+    ot[r.emp]=r2((ot[r.emp]||0)+r.oth);
+    empPay[r.emp]=r2((empPay[r.emp]||0)+r.pay);
+  });
+  // Weighted average, not the highest rate on file. Someone carrying a $25 manager code for 13 hours
+  // and a $16 code for 355 is not a $25 employee, and costing their variance at $25 inflates it.
+  Object.keys(act).forEach(e=>rate[e]=act[e]?r2(empPay[e]/act[e]):0);
+  const an={},sn={};
+  Object.keys(act).forEach(k=>an[normName(k)]=k);
+  Object.keys(sched).forEach(k=>sn[normName(k)]=k);
+  const people=[],noMatchPay=[],noMatchSched=[];
+  Object.keys(an).forEach(k=>{
+    const e=an[k];
+    if(sn[k]===undefined){noMatchPay.push(e);return}
+    const p=sched[sn[k]],ac=act[e],v=r2(ac-p);
+    people.push({emp:e,posted:p,actual:ac,var:v,rate:rate[e]||0,
+      dollars:r2(v*(rate[e]||0)),ot:ot[e]||0,salaried:(rate[e]||0)===0});
+  });
+  Object.keys(sn).forEach(k=>{if(an[k]===undefined)noMatchSched.push(sn[k])});
+  people.sort((x,y)=>y.var-x.var);
+  const over=r2(people.filter(p=>p.var>0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
+  const under=r2(people.filter(p=>p.var<0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
+  return{sec,den,ckc,atp,tot,totHrs,totPay,full,people,over,under,d0,d1,partial,
+    net:r2(over+under),unmapped,excl,noMatchPay,noMatchSched,
+    pct:tot?totPay/tot:0,perHr:totHrs?r2(tot/totHrs):0,
+    hasPay:rows.length>0,hasSched:Object.keys(sched).length>0,at:L.at};
+}
+
 /* ══════════ staging ══════════ */
 let STAGE=[];
 function handleFiles(files){
@@ -776,15 +901,29 @@ function handleFiles(files){
                  net :pickCol(p.headers,["net sales","netsales","net","sales","amount"],p.data),
                  ord :pickCol(p.headers,["total orders","orders","checks","order count"]),
                  gst :pickCol(p.headers,["total guests","guests","covers"])};
+      const H=p.headers.map(x=>x.toLowerCase());
+      const has=s=>H.some(x=>x===s||x.startsWith(s));
+      const kind=(has("job title")&&(has("regular hours")||has("total pay")))?"payroll"
+                :(has("name")&&has("payable hours"))?"sched":"sales";
+      if(kind!=="sales"){
+        const wkInfo=weekFromName(f.name);
+        const e={name:f.name,kind,headers:p.headers,rows:p.data,
+          parsed:kind==="payroll"?parsePayroll(p.data):parseSched(p.data),
+          wk:wkInfo?monday(wkInfo.start):null,span:wkInfo?wkInfo.days:null,
+          from:wkInfo?wkInfo.start:null,to:wkInfo?wkInfo.end:null};
+        STAGE=STAGE.filter(x=>x.name!==e.name);STAGE.push(e);
+        if(++done===list.length){drawStage();previewImport()}
+        return;
+      }
       const byName=guessBucketByName(f.name);
-      const e={name:f.name,bucket:byName||"pm",headers:p.headers,rows:p.data,map,
+      const e={name:f.name,kind:"sales",bucket:byName||"pm",headers:p.headers,rows:p.data,map,
                how:byName?"name":"none"};
       reparse(e);
       STAGE=STAGE.filter(x=>x.name!==e.name);STAGE.push(e);
       // Resolve unnamed files only once the whole batch has landed, so the files that DID identify
       // themselves are available as reference levels regardless of what order they finished reading in.
       if(++done===list.length){
-        STAGE.filter(x=>x.how==="none").forEach(x=>{
+        STAGE.filter(x=>x.kind==="sales"&&x.how==="none").forEach(x=>{
           const lvl=guessBucketByLevel(x.parsed,x.name);
           if(lvl){x.bucket=lvl.k;x.how="level";x.lvl=lvl}
         });
@@ -810,12 +949,30 @@ function reparse(e){
   e.parsed=parsed;e.bad=bad;e.min=lo;e.max=hi;
 }
 function setBucket(i,v){STAGE[i].bucket=v;STAGE[i].how="manual";drawStage();previewImport()}
+function setLabWeek(i,v){STAGE[i].wk=v?monday(v):null;STAGE[i].span=7;drawStage();previewImport()}
 function setCol(i,k,v){STAGE[i].map[k]=v;reparse(STAGE[i]);drawStage();previewImport()}
 function dropStage(i){STAGE.splice(i,1);drawStage();previewImport()}
 function drawStage(){
   const box=document.getElementById("staged");
   if(!STAGE.length){box.innerHTML="";return}
   box.innerHTML=`<div class="hr"></div>`+STAGE.map((e,i)=>{
+    if(e.kind&&e.kind!=="sales"){
+      const n=e.kind==="payroll"?e.parsed.length:Object.keys(e.parsed).length;
+      const bad=e.span&&e.span>8;
+      return `<div class="fcard">
+        <span class="swatch" style="background:var(--warn)"></span>
+        <span class="nm">${esc(e.name)}</span>
+        <span class="badge">${e.kind==="payroll"?"Toast payroll":"7shifts schedule"}</span>
+        <span class="mini">${n} ${e.kind==="payroll"?"employee/job rows":"people"}</span>
+        <label class="f" style="flex-direction:row;align-items:center;gap:6px">week of
+          <input type="date" value="${e.wk||""}" onchange="setLabWeek(${i},this.value)"></label>
+        ${bad?`<span class="badge open" style="flex-basis:100%"><strong>This file covers ${e.span} days.</strong>
+          Payroll has no dates inside it, so a multi-week export can't be split across weeks.
+          Pull it one week at a time.</span>`
+        :!e.wk?`<span class="badge open" style="flex-basis:100%">Couldn't read a week from the filename — set it above.</span>`:""}
+        <button class="sm danger" onclick="dropStage(${i})">remove</button>
+      </div>`;
+    }
     const b=BUCKETS.find(x=>x.k===e.bucket);
     return `<div class="fcard">
       <span class="swatch" style="background:var(${b.c})"></span>
@@ -859,14 +1016,15 @@ function closedDows(){
 function buildImport(){
   const dates=new Set(),warn=[],byB={};
   const CD=closedDows();
-  STAGE.forEach(e=>Object.keys(e.parsed).forEach(d=>dates.add(d)));
+  const SALES=STAGE.filter(e=>!e.kind||e.kind==="sales");
+  SALES.forEach(e=>Object.keys(e.parsed).forEach(d=>dates.add(d)));
   // Walk every date the exports covered, not only the ones that produced a row. A day the export
   // asked for and Toast returned nothing for is a closed day — it has to be recorded as zero, or it
   // silently leaves the week looking incomplete forever. Thanksgiving and Christmas are exactly this.
   let lo=null,hi=null;
-  STAGE.forEach(e=>{if(!e.min)return;if(!lo||e.min<lo)lo=e.min;if(!hi||e.max>hi)hi=e.max});
+  SALES.forEach(e=>{if(!e.min)return;if(!lo||e.min<lo)lo=e.min;if(!hi||e.max>hi)hi=e.max});
   if(lo)for(let d=lo;d<=hi;d=addD(d,1))dates.add(d);
-  BUCKETS.forEach(b=>byB[b.k]=STAGE.filter(e=>e.bucket===b.k));
+  BUCKETS.forEach(b=>byB[b.k]=SALES.filter(e=>e.bucket===b.k));
   BUCKETS.forEach(b=>{
     if(!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
     if(byB[b.k].length>1)warn.push(`${byB[b.k].length} files are mapped to <strong>${b.n}</strong>; their days will be merged.`);
@@ -939,9 +1097,34 @@ function previewImport(){
       <span class="mini">Only the buckets shown are touched. Projections are never modified.</span></div>`;
   box.innerHTML=h;
 }
+function applyLabor(){
+  const lab=STAGE.filter(e=>e.kind&&e.kind!=="sales"&&e.wk&&!(e.span>8));
+  const done=new Set();
+  lab.forEach(e=>{
+    const w=wk(e.wk);
+    if(!w.lab)w.lab={rows:[],sched:{},at:null};
+    if(e.kind==="payroll"){
+      w.lab.rows=e.parsed;
+      // The export's own range is the window these dollars cover. A Mon-Wed pull is a Mon-Wed
+      // labor figure, and it has to be measured against Mon-Wed of sales, not the whole week.
+      w.lab.days=(e.from&&e.to&&monday(e.from)===e.wk)?{from:dow(e.from),to:dow(e.to)}:null;
+    }
+    else w.lab.sched=e.parsed;
+    w.lab.at=new Date().toISOString().slice(0,16).replace("T"," ");
+    done.add(e.wk);
+  });
+  return{weeks:[...done],n:lab.length,skipped:STAGE.filter(e=>e.kind&&e.kind!=="sales"&&(!e.wk||e.span>8)).length};
+}
 function applyImport(){
   if(!STAGE.length)return;
-  const{rows}=buildImport();if(!rows.length)return;
+  const L=applyLabor();
+  const{rows}=buildImport();
+  if(!rows.length){
+    if(L.n){const ks=L.weeks.sort();state.cur=ks[ks.length-1];persist();render();
+      say(`Labor written into ${ks.map(label).join(", ")}`+(L.skipped?` · <span class="warn">${L.skipped} file(s) skipped</span>`:""));
+      STAGE=[];drawStage();document.getElementById("importPreview").innerHTML="";}
+    return;
+  }
   const touched=new Set(),changes=[];
   rows.forEach(r=>{
     const k=monday(r.d),i=dow(r.d),a=wk(k).act;
@@ -962,6 +1145,7 @@ function applyImport(){
   STAGE=[];drawStage();document.getElementById("importPreview").innerHTML="";
   persist();render();
   say(`Wrote ${rows.length} days into ${ks.length} week${ks.length===1?"":"s"}`+
+      (L.n?` · labor into ${L.weeks.length} week${L.weeks.length===1?"":"s"}`:"")+
       (changes.length?` · <span class="warn">${changes.length} existing value${changes.length===1?"":"s"} changed</span>`:""));
   document.getElementById("weekSel").scrollIntoView({behavior:"smooth",block:"center"});
   // Auto-save so keeping the history never depends on remembering to click anything.
@@ -1476,6 +1660,99 @@ function drawVar(){
   document.getElementById("varTable").innerHTML=h;
 }
 
+/* ══════════ labor view ══════════ */
+function drawLabor(){
+  const key=state.cur,L=laborFor(key),tgt=(+state.laborTarget||23)/100;
+  const set=(id,h)=>{const e=document.getElementById(id);if(e)e.innerHTML=h};
+  if(!L){
+    set("labSrc","");set("labKpis","");set("labSections","");set("labVar","");set("labVarNote","");
+    set("labNote",`No labor imported for ${label(key)}. Drop the <strong>Toast payroll export</strong> and the
+      <strong>7shifts schedule</strong> for this week in section 1 — one week per payroll file, since that export
+      carries no dates inside it.`);
+    set("labWhy","");return;
+  }
+  set("labSrc",`<span class="badge csv">${L.hasPay?"payroll":""}${L.hasPay&&L.hasSched?" + ":""}${L.hasSched?"schedule":""} · ${esc(L.at||"")}</span>`);
+  // ---- guard: labor % is meaningless on a part week ----
+  const salesOK=L.full&&L.tot>0;
+  const win=L.partial?`<strong>${DAYS[L.d0]}–${DAYS[L.d1]} only</strong> (${fmtDate(addD(key,L.d0))}–${fmtDate(addD(key,L.d1))})`
+                     :`the full week`;
+  set("labNote",salesOK
+    ?`Covering ${win}, measured against the same days of sales. Hourly labor only — salaried staff show $0 in
+       Toast and aren't in these figures. Pooled tip logins excluded.`
+    :`<span class="warn">Sales for ${L.partial?DAYS[L.d0]+"–"+DAYS[L.d1]:label(key)} are incomplete, so every
+       labor percentage is withheld.</span> Hours and dollars below are still accurate; only the ratios need
+       the matching sales days.`);
+  const pct=salesOK?L.pct:null;
+  set("labKpis",`
+    <div class="kpi"><div class="k">Labor %${L.partial?" — to date":""}</div>
+      <div class="v ${pct==null?"":pct<=tgt?"good":"bad"}">${pct==null?"—":(pct*100).toFixed(2)+"%"}</div>
+      <div class="n">${pct==null?"needs the matching sales days"
+        :`target ${(tgt*100).toFixed(0)}% · ${pct<=tgt?"under":"over"} by ${Math.abs((pct-tgt)*100).toFixed(2)} pts`+
+          (L.partial?` · ${DAYS[L.d0]}–${DAYS[L.d1]}`:"")}</div></div>
+    <div class="kpi"><div class="k">Labor dollars</div><div class="v">${money(L.totPay)}</div>
+      <div class="n">${L.totHrs.toLocaleString()} hrs${L.excl.hrs?` · ${L.excl.hrs.toLocaleString()} pooled hrs excluded`:""}</div></div>
+    <div class="kpi"><div class="k">Sales per hour</div><div class="v">${L.perHr?money(L.perHr):"—"}</div>
+      <div class="n">${L.excl.hrs?"pooled logins out of the denominator":"all counted hours"}</div></div>
+    <div class="kpi"><div class="k">Posted vs actual</div>
+      <div class="v ${L.net>0?"bad":L.net<0?"good":""}" style="font-size:17px">${money(L.net)}</div>
+      <div class="n">over ${money(L.over)} · under ${money(L.under)}</div></div>`);
+  // ---- sections ----
+  let h=`<table><tr><th class="lbl">Section</th><th>Hours</th><th>Labor $</th><th>OT hrs</th>
+    <th>Measured against</th><th class="total-col">Labor %</th></tr>`;
+  LSEC.forEach(s=>{
+    const d=L.sec[s],den=L.den[s];
+    const p=(salesOK&&den>0)?d.pay/den:null;
+    h+=`<tr><td class="lbl">${s}</td><td class="num">${d.hrs.toLocaleString()}</td>
+      <td class="num">${money(d.pay)}</td>
+      <td class="num ${d.ot?"warn":"dim"}">${d.ot||"—"}</td>
+      <td class="mini dim">${s.startsWith("ATP")?"ATP sales":"CKC sales"} ${den?money(den):"—"}</td>
+      <td class="num total-col ${p==null?"dim":p<=tgt?"good":""}">${p==null?"—":(p*100).toFixed(2)+"%"}</td></tr>`;
+  });
+  h+=`<tr class="tot"><td class="lbl">TOTAL</td><td class="num">${L.totHrs.toLocaleString()}</td>
+    <td class="num">${money(L.totPay)}</td><td class="num">${LSEC.reduce((x,s)=>x+L.sec[s].ot,0)||"—"}</td>
+    <td class="mini dim">all net sales ${L.tot?money(L.tot):"—"}</td>
+    <td class="num total-col">${pct==null?"—":(pct*100).toFixed(2)+"%"}</td></tr></table>`;
+  set("labSections",h);
+  // ---- per person ----
+  if(!L.people.length){set("labVar",`<div class="mini dim">Need both the payroll and the schedule for this week to compare.</div>`);set("labVarNote","")}
+  else{
+    const shown=L.people.filter(p=>Math.abs(p.var)>=1);
+    set("labVarNote",`${L.people.length} people matched · sorted by variance`);
+    let v=`<table><tr><th class="lbl">Employee</th><th>Posted</th><th>Actual</th><th>Variance</th>
+      <th>vs posted</th><th>OT</th><th class="total-col">Dollars</th></tr>`;
+    shown.forEach(p=>{
+      const c=p.var>0?"bad":p.var<0?"good":"dim";
+      v+=`<tr><td class="lbl">${esc(p.emp)}${p.salaried?` <span class="mini dim">salaried</span>`:""}</td>
+        <td class="num">${p.posted.toLocaleString()}</td><td class="num">${p.actual.toLocaleString()}</td>
+        <td class="num ${c}">${p.var>0?"+":""}${p.var.toLocaleString()}</td>
+        <td class="num ${c}">${p.posted?((p.var/p.posted*100)>0?"+":"")+(p.var/p.posted*100).toFixed(0)+"%":"—"}</td>
+        <td class="num ${p.ot?"warn":"dim"}">${p.ot||"—"}</td>
+        <td class="num total-col ${p.salaried?"dim":c}">${p.salaried?"—":money(p.dollars)}</td></tr>`;
+    });
+    v+=`<tr class="tot"><td class="lbl">NET</td><td colspan="5" class="mini dim">
+      salaried excluded from dollars — their Toast hours aren't paid hours</td>
+      <td class="num total-col ${L.net>0?"bad":"good"}">${money(L.net)}</td></tr></table>`;
+    set("labVar",v);
+  }
+  // ---- what was left out ----
+  const notes=[];
+  if(Object.keys(L.excl.titles).length)
+    notes.push(`<strong>Excluded as pooled logins:</strong> `+
+      Object.keys(L.excl.titles).map(t=>`${esc(t)} ${L.excl.titles[t].toLocaleString()} hrs`).join(", ")+
+      ` — hours with no dollars behind them. They stay out of labor %, out of sales-per-hour, and out of the overtime flags.`);
+  if(Object.keys(L.unmapped).length)
+    notes.push(`<strong class="bad">Job titles with no section:</strong> `+
+      Object.keys(L.unmapped).map(t=>`${esc(t)} (${L.unmapped[t]} hrs)`).join(", ")+
+      ` — these are missing from every total above. Map them in Settings.`);
+  if(L.noMatchPay.length)
+    notes.push(`<strong>Clocked but not on the posted schedule:</strong> ${L.noMatchPay.map(esc).join(", ")}.`);
+  if(L.noMatchSched.length)
+    notes.push(`<strong>Posted but no Toast hours:</strong> ${L.noMatchSched.map(esc).join(", ")} — usually salaried, worth confirming.`);
+  if(L.hasPay&&!L.hasSched)notes.push(`<strong>No 7shifts schedule for this week</strong>, so there's nothing to compare actual hours against.`);
+  if(L.hasSched&&!L.hasPay)notes.push(`<strong>No payroll export for this week</strong>, so there are no actual hours or dollars.`);
+  set("labWhy",notes.length?`<div class="alert" style="margin-top:11px">`+notes.join("<br>")+`</div>`:"");
+}
+
 /* ══════════ covers + history ══════════ */
 function drawCovers(){
   const key=state.cur,a=wk(key).act;
@@ -1587,7 +1864,7 @@ function drawFlags(){
     f.push({c:"",t:`<strong>${label(key)} projection isn't committed</strong> and the week has already started. There's no fixed baseline to measure against.`});
   const nx=wk(addD(state.cur,7)).proj;
   if(sum(nx.cur.am,0,6)+sum(nx.cur.pm,0,6)+sum(nx.cur.atp,0,6)===0)
-    f.push({c:"b",t:`<strong>${label(addD(state.cur,7))} has no projection.</strong> Set a target in section 6.`});
+    f.push({c:"b",t:`<strong>${label(addD(state.cur,7))} has no projection.</strong> Set a target in section 5.`});
   if(w.proj.revs&&w.proj.revs.length)
     f.push({c:"",t:`<strong>${w.proj.revs.length} post-commit revision${w.proj.revs.length===1?"":"s"}</strong> on this week. Headline variance still uses the original.`});
   const acc=completeWeeksBefore(key,4).map(k=>{
@@ -1664,6 +1941,7 @@ function render(){
   document.getElementById("aD").value=A.start;document.getElementById("aWPP").value=A.wpp;
   document.getElementById("aPPY").value=A.ppy;
   document.getElementById("cents").checked=!!state.cents;
+  document.getElementById("labTgt").value=state.laborTarget||23;
   document.getElementById("autosave").checked=state.autosave!==false;
   drawDirty();
   document.getElementById("anchorNote").innerHTML=
@@ -1686,7 +1964,7 @@ function render(){
   document.getElementById("advanced").style.display=adv?"":"none";
   const ab=document.getElementById("advBtn");
   ab.className="sm"+(adv?" pri":"");ab.textContent=adv?"Hide analysis":"Analysis";
-  drawFirstRun();drawNav();drawVar();drawKpis();drawFlags();drawActuals();drawNext();
+  drawFirstRun();drawNav();drawVar();drawKpis();drawFlags();drawActuals();drawLabor();drawNext();
   if(adv){drawTrend();drawPeriod();drawProj();drawCovers();drawHist()}
 }
 
