@@ -173,6 +173,7 @@ ol.steps b{color:var(--tx)}
   </div>
   <div class="mini" id="labNote" style="margin:6px 0 10px"></div>
   <div class="grid2" id="labKpis" style="margin-bottom:12px"></div>
+  <div id="otPanel"></div>
   <div class="scroll"><div id="labSections"></div></div>
   <div style="margin-top:13px"><div class="row" style="justify-content:space-between">
     <h2 style="margin:0;font-size:12px">Posted vs actual, by person</h2>
@@ -859,13 +860,18 @@ function laborFor(key){
   const den={"BOH":ckc,"FOH/Bar":ckc,"ATP BOH":atp,"ATP Bar":atp};
   const totHrs=r2(LSEC.reduce((x,s)=>x+sec[s].hrs,0)),totPay=r2(LSEC.reduce((x,s)=>x+sec[s].pay,0));
   // per person: actual (counted hours only) vs posted
-  const act={},ot={},empPay={},rate={};
+  const act={},ot={},empPay={},rate={},otPay={},empSec={};
   rows.forEach(r=>{
     if(map[r.job]==="")return;                  // pooled logins are not people
     act[r.emp]=r2((act[r.emp]||0)+r.rh+r.oth);
     ot[r.emp]=r2((ot[r.emp]||0)+r.oth);
     empPay[r.emp]=r2((empPay[r.emp]||0)+r.pay);
+    otPay[r.emp]=r2((otPay[r.emp]||0)+r.otPay);
+    const s=empSec[r.emp]||(empSec[r.emp]={});
+    s[map[r.job]]=r2((s[map[r.job]]||0)+r.rh+r.oth);
   });
+  const secOf=e=>{const s=empSec[e]||{};let b="",m=-1;
+    Object.keys(s).forEach(k=>{if(s[k]>m){m=s[k];b=k}});return b};
   // Weighted average, not the highest rate on file. Someone carrying a $25 manager code for 13 hours
   // and a $16 code for 355 is not a $25 employee, and costing their variance at $25 inflates it.
   Object.keys(act).forEach(e=>rate[e]=act[e]?r2(empPay[e]/act[e]):0);
@@ -878,13 +884,35 @@ function laborFor(key){
     if(sn[k]===undefined){noMatchPay.push(e);return}
     const p=sched[sn[k]],ac=act[e],v=r2(ac-p);
     people.push({emp:e,posted:p,actual:ac,var:v,rate:rate[e]||0,
-      dollars:r2(v*(rate[e]||0)),ot:ot[e]||0,salaried:(rate[e]||0)===0});
+      dollars:r2(v*(rate[e]||0)),ot:ot[e]||0,otPay:otPay[e]||0,
+      // time-and-a-half means a third of the overtime pay is the premium — the genuinely avoidable part
+      premium:r2((otPay[e]||0)/3),sec:secOf(e),salaried:(rate[e]||0)===0});
   });
+  // Overtime is its own list: it must include people who clocked but were never posted, who have no
+  // place in a posted-vs-actual table. Keeping them separate stops them polluting the variance totals.
+  const otList=Object.keys(act).filter(e=>ot[e]>0).map(e=>({
+    emp:e,actual:act[e],ot:ot[e],otPay:otPay[e]||0,premium:r2((otPay[e]||0)/3),
+    rate:rate[e]||0,sec:secOf(e),salaried:(rate[e]||0)===0,
+    posted:(sn[normName(e)]!==undefined)?sched[sn[normName(e)]]:null
+  })).sort((x,y)=>y.ot-x.ot);
+  otList.forEach(o=>{
+    o.over40=r2(Math.max(0,o.actual-40));
+    o.diag=o.salaried?"salaried"
+      :o.posted==null?"nosched"
+      :o.posted>=40?"scheduled"
+      :"overran";
+    // who in the same section had room that week, cheapest first
+    o.cover=Object.keys(act).filter(e=>e!==o.emp&&secOf(e)===o.sec&&act[e]<35&&act[e]>4&&(rate[e]||0)>0)
+      .map(e=>({emp:e,hrs:act[e],rate:rate[e],room:r2(40-act[e])}))
+      .sort((a,b)=>a.rate-b.rate).slice(0,3);
+  });
+  const otHrs=r2(otList.reduce((s,o)=>s+o.ot,0));
+  const otPrem=r2(otList.filter(o=>!o.salaried).reduce((s,o)=>s+o.premium,0));
   Object.keys(sn).forEach(k=>{if(an[k]===undefined)noMatchSched.push(sn[k])});
   people.sort((x,y)=>y.var-x.var);
   const over=r2(people.filter(p=>p.var>0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
   const under=r2(people.filter(p=>p.var<0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
-  return{sec,den,ckc,atp,tot,totHrs,totPay,full,people,over,under,d0,d1,partial,
+  return{sec,den,ckc,atp,tot,totHrs,totPay,full,people,over,under,d0,d1,partial,otList,otHrs,otPrem,
     net:r2(over+under),unmapped,excl,noMatchPay,noMatchSched,
     pct:tot?totPay/tot:0,perHr:totHrs?r2(tot/totHrs):0,
     hasPay:rows.length>0,hasSched:Object.keys(sched).length>0,at:L.at};
@@ -1693,6 +1721,66 @@ function drawVar(){
   document.getElementById("varTable").innerHTML=h;
 }
 
+/* ══════════ overtime ══════════
+   Every suggestion here is arithmetic on data already in the sheet. Where the data can't tell us
+   something — whether a shift is actually transferable, whether the hours were needed — it says so
+   instead of guessing.  */
+function otHistory(emp,key,back){
+  const ks=dataKeys().filter(k=>k<=key).slice(-back);
+  let n=0,seen=0;
+  ks.forEach(k=>{const L2=laborFor(k);if(!L2||!L2.otList)return;seen++;
+    if(L2.otList.some(o=>o.emp===emp&&o.ot>0))n++});
+  return{n,seen};
+}
+function drawOT(key,L,tgt){
+  const live=L.otList.filter(o=>!o.salaried), sal=L.otList.filter(o=>o.salaried);
+  if(!L.otList.length)
+    return `<div class="alert g" style="margin-bottom:12px"><strong>No overtime this week.</strong></div>`;
+  let h=`<div class="panel" style="margin:0 0 12px;border-color:${live.length?"var(--warn)":"var(--line)"}">
+    <div class="row" style="justify-content:space-between;margin-bottom:9px">
+      <h2 style="margin:0">Overtime</h2>
+      <span class="mini">${live.length} ${live.length===1?"person":"people"} · ${L.otHrs} hrs ·
+        premium <strong>${money(L.otPrem)}</strong></span></div>`;
+  if(!live.length)
+    h+=`<div class="mini dim">Only salaried staff show overtime this week, which costs nothing — see below.</div>`;
+  live.forEach(o=>{
+    const hist=otHistory(o.emp,key,6);
+    const repeat=hist.n>=2;
+    const diag=
+      o.diag==="scheduled"?`<span class="bad">Scheduled above 40.</span> Posted at <strong>${o.posted}</strong> hrs —
+        the overtime was bought before the week started.`
+     :o.diag==="overran"?`Posted at <strong>${o.posted}</strong> hrs and worked <strong>${o.actual}</strong> —
+        overran by ${r2(o.actual-o.posted)}. The extra hours weren't on the schedule.`
+     :`<span class="warn">No posted schedule</span> to compare against.`;
+    const fix=
+      o.diag==="scheduled"?`Cut the posted week to 40. That removes <strong>${o.over40} hrs</strong> of overtime
+        and <strong>${money(o.premium)}</strong> of premium, before anyone has to manage it mid-week.`
+     :o.diag==="overran"?`The schedule was under 40 — this came from hours worked beyond it. Either approve
+        them in advance or post them, so the overtime is a decision rather than a surprise.`
+     :`Post this person in 7shifts so the overrun is visible before payroll.`;
+    h+=`<div style="border-left:3px solid var(--warn);padding:8px 12px;margin-bottom:8px;background:var(--panel2);border-radius:0 7px 7px 0">
+      <div class="row" style="justify-content:space-between">
+        <div><strong>${esc(o.emp)}</strong> <span class="mini dim">${o.sec}</span>
+          ${repeat?`<span class="badge open">${hist.n} of last ${hist.seen} weeks</span>`:""}</div>
+        <span class="mini">${o.actual} hrs · <strong>${o.ot} OT</strong> · ${money(o.otPay)} paid ·
+          <strong>${money(o.premium)}</strong> premium</span></div>
+      <div class="mini" style="margin-top:5px">${diag}</div>
+      <div class="mini" style="margin-top:4px"><strong>Fix:</strong> ${fix}</div>`;
+    if(o.cover.length&&o.over40>0)
+      h+=`<div class="mini" style="margin-top:4px"><strong>Who had room in ${o.sec} that week:</strong> `+
+        o.cover.map(c=>`${esc(c.emp.split(",")[0])} worked ${c.hrs} (${c.room} spare) at ${money(c.rate,true)}/hr`).join("; ")+
+        `. Moving ${o.over40} hrs to the cheapest of them saves about
+        <strong>${money(r2(o.over40*(o.rate*1.5-o.cover[0].rate)))}</strong> —
+        <span class="dim">if the work transfers, which the data can't tell you.</span></div>`;
+    h+=`</div>`;
+  });
+  if(sal.length)
+    h+=`<div class="mini dim" style="margin-top:4px"><strong>Ignore:</strong> `+
+      sal.map(o=>`${esc(o.emp)} ${o.ot} hrs`).join(", ")+
+      ` — salaried, $0.00 in Toast, so this "overtime" costs nothing. It shows every week and means nothing.</div>`;
+  return h+`</div>`;
+}
+
 /* ══════════ labor view ══════════ */
 function drawLabor(){
   const key=state.cur,L=laborFor(key),tgt=(+state.laborTarget||23)/100;
@@ -1729,6 +1817,7 @@ function drawLabor(){
     <div class="kpi"><div class="k">Posted vs actual</div>
       <div class="v ${L.net>0?"bad":L.net<0?"good":""}" style="font-size:17px">${money(L.net)}</div>
       <div class="n">over ${money(L.over)} · under ${money(L.under)}</div></div>`);
+  set("otPanel",drawOT(key,L,tgt));
   // ---- sections ----
   let h=`<table><tr><th class="lbl">Section</th><th>Hours</th><th>Labor $</th><th>OT hrs</th>
     <th>Measured against</th><th class="total-col">Labor %</th></tr>`;
@@ -1749,7 +1838,11 @@ function drawLabor(){
   // ---- per person ----
   if(!L.people.length){set("labVar",`<div class="mini dim">Need both the payroll and the schedule for this week to compare.</div>`);set("labVarNote","")}
   else{
-    const shown=L.people.filter(p=>Math.abs(p.var)>=1);
+    // Hiding small variances keeps the table short, but it also makes someone vanish on the week they
+    // finally land on schedule — which is the week you most want to see. So they collapse to one line
+    // you can open, never disappear.
+    const near=L.people.filter(p=>Math.abs(p.var)<1);
+    const shown=state.labAll?L.people:L.people.filter(p=>Math.abs(p.var)>=1);
     set("labVarNote",`${L.people.length} people matched · sorted by variance`);
     let v=`<table><tr><th class="lbl">Employee</th><th>Posted</th><th>Actual</th><th>Variance</th>
       <th>vs posted</th><th>OT</th><th class="total-col">Dollars</th></tr>`;
@@ -1762,6 +1855,15 @@ function drawLabor(){
         <td class="num ${p.ot?"warn":"dim"}">${p.ot||"—"}</td>
         <td class="num total-col ${p.salaried?"dim":c}">${p.salaried?"—":money(p.dollars)}</td></tr>`;
     });
+    if(near.length&&!state.labAll)
+      v+=`<tr><td class="lbl dim" style="font-weight:400">on schedule</td>
+        <td colspan="6" class="mini dim" style="text-align:left">
+        ${near.length} ${near.length===1?"person is":"people are"} within an hour of their posted schedule
+        — ${near.slice(0,6).map(p=>esc(p.emp.split(",")[0])+" "+(p.var>0?"+":"")+p.var.toFixed(1)).join(", ")}${near.length>6?", …":""}
+        &nbsp;<a href="#" onclick="state.labAll=true;persist();render();return false">show all</a></td></tr>`;
+    if(state.labAll)
+      v+=`<tr><td colspan="7" class="mini dim" style="text-align:left">
+        showing everyone &nbsp;<a href="#" onclick="state.labAll=false;persist();render();return false">hide those on schedule</a></td></tr>`;
     v+=`<tr class="tot"><td class="lbl">NET</td><td colspan="5" class="mini dim">
       salaried excluded from dollars — their Toast hours aren't paid hours</td>
       <td class="num total-col ${L.net>0?"bad":"good"}">${money(L.net)}</td></tr></table>`;
