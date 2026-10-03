@@ -1026,7 +1026,8 @@ function buildImport(){
   if(lo)for(let d=lo;d<=hi;d=addD(d,1))dates.add(d);
   BUCKETS.forEach(b=>byB[b.k]=SALES.filter(e=>e.bucket===b.k));
   BUCKETS.forEach(b=>{
-    if(!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
+    // only worth saying when sales files are actually in the drop — silence on a labor-only drop
+    if(SALES.length&&!byB[b.k].length)warn.push(`No <strong>${b.f}</strong> file staged — ${b.n} keeps whatever is already stored.`);
     if(byB[b.k].length>1)warn.push(`${byB[b.k].length} files are mapped to <strong>${b.n}</strong>; their days will be merged.`);
   });
   const rows=[...dates].sort().map(d=>{
@@ -1059,8 +1060,40 @@ function previewImport(){
   const box=document.getElementById("importPreview");
   if(!STAGE.length){box.innerHTML="";return}
   const{rows,warn}=buildImport();
+  const LAB=STAGE.filter(e=>e.kind&&e.kind!=="sales");
+  const SAL=STAGE.filter(e=>!e.kind||e.kind==="sales");
+  const labOK=LAB.filter(e=>e.wk&&!(e.span>8)),labBad=LAB.filter(e=>!e.wk||e.span>8);
   let h=warn.map(w=>`<div class="alert i">${w}</div>`).join("");
-  if(!rows.length){box.innerHTML=h+`<div class="alert b">No usable rows. Check the date and net-sales columns.</div>`;return}
+  // ---- labor block, which has to stand on its own: labor is often dropped without any sales ----
+  if(LAB.length){
+    const byWk={};labOK.forEach(e=>{(byWk[e.wk]||(byWk[e.wk]={}))[e.kind]=e});
+    const wks=Object.keys(byWk).sort();
+    if(wks.length){
+      h+=`<div class="hr"></div><h2>Labor — ${wks.length} week${wks.length===1?"":"s"}</h2>`;
+      h+=`<table><tr><th class="lbl">Week</th><th>Payroll</th><th>Schedule</th><th></th></tr>`;
+      wks.forEach(k=>{
+        const p=byWk[k].payroll,s=byWk[k].sched;
+        h+=`<tr><td class="lbl">${label(k)} <span class="mini dim">${fmtDate(k)}</span></td>
+          <td class="num${p?"":" dim"}">${p?p.parsed.length+" rows":"—"}</td>
+          <td class="num${s?"":" dim"}">${s?Object.keys(s.parsed).length+" people":"—"}</td>
+          <td class="mini ${p&&s?"dim":"warn"}">${p&&s?"complete":p?"no schedule to compare against":"no payroll — hours only"}</td></tr>`;
+      });
+      h+=`</table>`;
+    }
+    if(labBad.length)h+=`<div class="alert b"><strong>${labBad.length} labor file${labBad.length===1?"":"s"} can't be placed:</strong> `+
+      labBad.map(e=>`${esc(e.name)} ${e.span>8?`covers ${e.span} days`:"has no week set"}`).join("; ")+
+      `. Set the week on the card, or pull payroll one week at a time.</div>`;
+  }
+  if(SAL.length&&!rows.length)
+    h+=`<div class="alert b">The sales files produced no usable rows. Check the date and net-sales columns.</div>`;
+  if(!rows.length){
+    // nothing to preview on the sales side — show the button if there is labor to write, then stop
+    if(labOK.length)h+=`<div class="row" style="margin-top:11px">
+      <button class="pri" onclick="applyImport()">Write in ${labOK.length} labor file${labOK.length===1?"":"s"}</button>
+      <button onclick="STAGE=[];drawStage();previewImport()">Clear</button>
+      <span class="mini">Sales are untouched.</span></div>`;
+    box.innerHTML=h;return;
+  }
   const weeks=[...new Set(rows.map(r=>monday(r.d)))].sort();
   const big=rows.length>21;
   h+=`<div class="hr"></div><h2>Preview — ${rows.length} days across ${weeks.length} week${weeks.length===1?"":"s"}`+
@@ -1092,7 +1125,7 @@ function previewImport(){
     h+=`</table>`;
   }
   h+=`<div class="row" style="margin-top:11px">
-      <button class="pri" onclick="applyImport()">Write in ${rows.length} day${rows.length===1?"":"s"}</button>
+      <button class="pri" onclick="applyImport()">Write in ${rows.length} day${rows.length===1?"":"s"} of sales${labOK.length?` + ${labOK.length} labor file${labOK.length===1?"":"s"}`:""}</button>
       <button onclick="STAGE=[];drawStage();previewImport()">Clear</button>
       <span class="mini">Only the buckets shown are touched. Projections are never modified.</span></div>`;
   box.innerHTML=h;
