@@ -238,6 +238,32 @@ Pages redeploys in a minute or two. Anyone with the page already open should rel
 
 Newest first. Dates are when the work landed, not when it was deployed.
 
+## 2026-10-06 — posted vs actual by department, and a name-matching fix
+
+- **Posted vs actual is now broken out by department** — BOH, FOH/Bar, ATP BOH, ATP Bar — each showing
+  posted hours, actual hours, over, under, net and gross error. The per-person table sits underneath,
+  grouped under the same headings with its section's totals on the header row.
+- **Gross error is now shown alongside net**, and it is the more honest figure. Net is what the gap cost;
+  gross is over plus under — how far the schedule was wrong in either direction. A week can net near zero
+  while being wrong by three times that in both directions, and netting hides it.
+- Anyone who clocked with no posted shift appears in their department marked *not posted*, with their cost,
+  because they never show up in over/under at all.
+
+**Name matching across the two systems**
+
+Toast carries legal names, 7shifts carries preferred ones — the pattern is `Surname Surname, Legalname`
+in one system against `Preferredname Surname Surname` in the other. Flipping `Last, First` and stripping
+suffixes wasn't enough, and the unmatched record was being presented as a genuinely unposted employee.
+That is a data problem reported as a management problem, which is worse than reporting nothing.
+
+- Names are now linked when they share **two or more surname tokens** and exactly one candidate exists on
+  each side. One shared surname is not enough, so two unrelated people with the same last name are never
+  fused; where it's ambiguous, neither is linked and both are reported.
+- Every link is shown on screen for confirmation.
+- Anyone still unmatched is now labelled *"confirm each is genuinely unposted rather than spelled
+  differently in 7shifts"* rather than stated as a finding.
+- A manual alias map is supported for cases the token rule can't reach.
+
 ## 2026-10-05 — overtime, and tidying
 
 - **Overtime is its own block** at the top of the labor section: who had it, how much, what the premium

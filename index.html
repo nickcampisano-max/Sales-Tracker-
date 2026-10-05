@@ -176,9 +176,9 @@ ol.steps b{color:var(--tx)}
   <div id="otPanel"></div>
   <div class="scroll"><div id="labSections"></div></div>
   <div style="margin-top:13px"><div class="row" style="justify-content:space-between">
-    <h2 style="margin:0;font-size:12px">Posted vs actual, by person</h2>
+    <h2 style="margin:0;font-size:12px">Posted vs actual</h2>
     <span class="mini" id="labVarNote"></span></div>
-    <div class="scroll" style="margin-top:7px"><div id="labVar"></div></div></div>
+    <div class="scroll" style="margin-top:7px"><div id="labSecVar"></div><div id="labVar"></div></div></div>
   <div id="labWhy"></div>
 </div>
 
@@ -881,6 +881,28 @@ function laborFor(key){
   const an={},sn={};
   Object.keys(act).forEach(k=>an[normName(k)]=k);
   Object.keys(sched).forEach(k=>sn[normName(k)]=k);
+  // Legal name in Toast, preferred name in 7shifts — "Zavaleta Jimenez, Romualdo" vs
+  // "Roman Zavaleta Jimenez". Link them on shared surname tokens, but only when exactly one candidate
+  // exists on each side, so two people sharing one surname are never fused.
+  const linked=[];
+  (()=>{
+    const tk=s=>normName(s).split(" ").filter(t=>t.length>=3);
+    const man=state.nameAliases||{};
+    Object.keys(man).forEach(p=>{const pk=normName(p),sk=normName(man[p]);
+      if(an[pk]&&sn[sk]){sn[pk]=sn[sk];if(pk!==sk)delete sn[sk];linked.push({pay:an[pk],sched:sched[sn[pk]]!==undefined?sn[pk]:man[p],how:"manual"})}});
+    const share=(a,b)=>{const B=new Set(tk(b));return tk(a).filter(t=>B.has(t)).length};
+    let upay=Object.keys(an).filter(k=>sn[k]===undefined);
+    let usch=Object.keys(sn).filter(k=>an[k]===undefined);
+    upay.forEach(pk=>{
+      const c=usch.filter(sk=>share(an[pk],sn[sk])>=2);
+      if(c.length!==1)return;
+      const sk=c[0];
+      if(upay.filter(p2=>share(an[p2],sn[sk])>=2).length!==1)return;   // ambiguous from the other side
+      linked.push({pay:an[pk],sched:sn[sk],how:"name"});
+      sn[pk]=sn[sk];delete sn[sk];
+      usch=usch.filter(x=>x!==sk);
+    });
+  })();
   const people=[],noMatchPay=[],noMatchSched=[];
   Object.keys(an).forEach(k=>{
     const e=an[k];
@@ -911,11 +933,29 @@ function laborFor(key){
   });
   const otHrs=r2(otList.reduce((s,o)=>s+o.ot,0));
   const otPrem=r2(otList.filter(o=>!o.salaried).reduce((s,o)=>s+o.premium,0));
+  // People who clocked with no posted shift at all. They never appear in over/under because there is
+  // nothing to compare them to — which means the schedule error is bigger than over/under alone shows.
+  const unposted=Object.keys(act).filter(e=>sn[normName(e)]===undefined).map(e=>({
+    emp:e,actual:act[e],rate:rate[e]||0,sec:secOf(e),
+    cost:r2(act[e]*(rate[e]||0)),salaried:(rate[e]||0)===0})).sort((a,b)=>b.cost-a.cost);
+  // Per-section posted-vs-actual. Net hides the size of the error; gross is what the schedule got wrong.
+  const secVar={};
+  LSEC.forEach(s=>secVar[s]={posted:0,actual:0,over:0,under:0,n:0,unposted:0,unpostedCost:0});
+  people.forEach(p=>{const v=secVar[p.sec];if(!v||p.salaried)return;
+    v.posted+=p.posted;v.actual+=p.actual;v.n++;
+    if(p.var>0)v.over+=p.dollars;else v.under+=p.dollars});
+  unposted.forEach(u=>{const v=secVar[u.sec];if(!v||u.salaried)return;
+    v.unposted++;v.unpostedCost=r2(v.unpostedCost+u.cost)});
+  LSEC.forEach(s=>{const v=secVar[s];
+    v.posted=r2(v.posted);v.actual=r2(v.actual);v.over=r2(v.over);v.under=r2(v.under);
+    v.net=r2(v.over+v.under);v.gross=r2(v.over-v.under)});
+  const grossAll=r2(LSEC.reduce((x,s)=>x+secVar[s].gross,0));
   Object.keys(sn).forEach(k=>{if(an[k]===undefined)noMatchSched.push(sn[k])});
   people.sort((x,y)=>y.var-x.var);
   const over=r2(people.filter(p=>p.var>0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
   const under=r2(people.filter(p=>p.var<0&&!p.salaried).reduce((s,p)=>s+p.dollars,0));
   return{sec,den,ckc,atp,tot,totHrs,totPay,full,people,over,under,d0,d1,partial,otList,otHrs,otPrem,
+    secVar,unposted,grossAll,linked,
     net:r2(over+under),unmapped,excl,noMatchPay,noMatchSched,
     pct:tot?totPay/tot:0,perHr:totHrs?r2(tot/totHrs):0,
     hasPay:rows.length>0,hasSched:Object.keys(sched).length>0,at:L.at};
@@ -1841,6 +1881,34 @@ function drawLabor(){
   // ---- per person ----
   if(!L.people.length){set("labVar",`<div class="mini dim">Need both the payroll and the schedule for this week to compare.</div>`);set("labVarNote","")}
   else{
+    // ---- by department first: net is what it cost, gross is how wrong the schedule was ----
+    let sv=`<table style="margin-bottom:12px"><tr><th class="lbl">Section</th><th>Posted</th><th>Actual</th>
+      <th>Hrs</th><th>Over</th><th>Under</th><th class="total-col">Net</th><th>Gross error</th></tr>`;
+    let tP=0,tA=0,tO=0,tU=0;
+    LSEC.forEach(s=>{
+      const v=L.secVar[s];if(!v.n&&!v.unposted)return;
+      tP+=v.posted;tA+=v.actual;tO+=v.over;tU+=v.under;
+      const dh=r2(v.actual-v.posted);
+      sv+=`<tr><td class="lbl">${s}</td><td class="num">${hrs(v.posted)}</td><td class="num">${hrs(v.actual)}</td>
+        <td class="num ${dh>0?"bad":dh<0?"good":"dim"}">${dh>0?"+":""}${hrs(dh)}</td>
+        <td class="num bad">${v.over?money(v.over):"—"}</td>
+        <td class="num good">${v.under?money(v.under):"—"}</td>
+        <td class="num total-col ${v.net>0?"bad":v.net<0?"good":"dim"}">${money(v.net)}</td>
+        <td class="num warn">${money(v.gross)}</td></tr>`;
+      if(v.unposted)sv+=`<tr><td class="lbl dim" style="font-weight:400;padding-left:18px">unposted</td>
+        <td colspan="6" class="mini warn" style="text-align:left">${v.unposted}
+        ${v.unposted===1?"person":"people"} clocked with no posted shift — ${money(v.unpostedCost)} of labor
+        that isn't in the over/under above</td><td class="num dim">—</td></tr>`;
+    });
+    sv+=`<tr class="tot"><td class="lbl">TOTAL</td><td class="num">${hrs(tP)}</td><td class="num">${hrs(tA)}</td>
+      <td class="num">${r2(tA-tP)>0?"+":""}${hrs(r2(tA-tP))}</td>
+      <td class="num bad">${money(tO)}</td><td class="num good">${money(tU)}</td>
+      <td class="num total-col ${tO+tU>0?"bad":"good"}">${money(r2(tO+tU))}</td>
+      <td class="num warn">${money(L.grossAll)}</td></tr></table>
+      <div class="mini dim" style="margin:-6px 0 12px">
+        <strong>Net</strong> is what the gap cost. <strong>Gross error</strong> is over plus under —
+        how far the schedule was wrong in either direction, which netting hides.</div>`;
+    set("labSecVar",sv);
     // Hiding small variances keeps the table short, but it also makes someone vanish on the week they
     // finally land on schedule — which is the week you most want to see. So they collapse to one line
     // you can open, never disappear.
@@ -1849,14 +1917,30 @@ function drawLabor(){
     set("labVarNote",`${L.people.length} people matched · sorted by variance`);
     let v=`<table><tr><th class="lbl">Employee</th><th>Posted</th><th>Actual</th><th>Variance</th>
       <th>vs posted</th><th>OT</th><th class="total-col">Dollars</th></tr>`;
-    shown.forEach(p=>{
-      const c=p.var>0?"bad":p.var<0?"good":"dim";
-      v+=`<tr><td class="lbl">${esc(p.emp)}${p.salaried?` <span class="mini dim">salaried</span>`:""}</td>
-        <td class="num">${hrs(p.posted)}</td><td class="num">${hrs(p.actual)}</td>
-        <td class="num ${c}">${p.var>0?"+":""}${hrs(p.var)}</td>
-        <td class="num ${c}">${p.posted?((p.var/p.posted*100)>0?"+":"")+(p.var/p.posted*100).toFixed(0)+"%":"—"}</td>
-        <td class="num ${p.ot?"warn":"dim"}">${p.ot?hrs(p.ot):"—"}</td>
-        <td class="num total-col ${p.salaried?"dim":c}">${p.salaried?"—":money(p.dollars)}</td></tr>`;
+    // grouped by department — the payroll export says who works where, so the table should too
+    LSEC.forEach(S=>{
+      const inSec=shown.filter(p=>p.sec===S);
+      const un=L.unposted.filter(u=>u.sec===S&&!u.salaried);
+      if(!inSec.length&&!un.length)return;
+      const sv=L.secVar[S];
+      v+=`<tr><td class="lbl" style="background:var(--panel2)">${S}</td>
+        <td colspan="5" class="mini dim" style="text-align:left;background:var(--panel2)">${sv.n} ${sv.n===1?"person":"people"} · gross error ${money(sv.gross)}</td>
+        <td class="num total-col ${sv.net>0?"bad":sv.net<0?"good":"dim"}">${money(sv.net)}</td></tr>`;
+      inSec.forEach(p=>{
+        const c=p.var>0?"bad":p.var<0?"good":"dim";
+        v+=`<tr><td class="lbl" style="font-weight:400;padding-left:18px">${esc(p.emp)}${p.salaried?` <span class="mini dim">salaried</span>`:""}</td>
+          <td class="num">${hrs(p.posted)}</td><td class="num">${hrs(p.actual)}</td>
+          <td class="num ${c}">${p.var>0?"+":""}${hrs(p.var)}</td>
+          <td class="num ${c}">${p.posted?((p.var/p.posted*100)>0?"+":"")+(p.var/p.posted*100).toFixed(0)+"%":"—"}</td>
+          <td class="num ${p.ot?"warn":"dim"}">${p.ot?hrs(p.ot):"—"}</td>
+          <td class="num total-col ${p.salaried?"dim":c}">${p.salaried?"—":money(p.dollars)}</td></tr>`;
+      });
+      un.forEach(u=>{
+        v+=`<tr><td class="lbl" style="font-weight:400;padding-left:18px">${esc(u.emp)} <span class="mini warn">not posted</span></td>
+          <td class="num dim">—</td><td class="num">${hrs(u.actual)}</td>
+          <td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td>
+          <td class="num total-col warn">${money(u.cost)}</td></tr>`;
+      });
     });
     if(near.length&&!state.labAll)
       v+=`<tr><td class="lbl dim" style="font-weight:400">on schedule</td>
@@ -1882,8 +1966,13 @@ function drawLabor(){
     notes.push(`<strong class="bad">Job titles with no section:</strong> `+
       Object.keys(L.unmapped).map(t=>`${esc(t)} (${hrs(L.unmapped[t])} hrs)`).join(", ")+
       ` — these are missing from every total above. Map them in Settings.`);
+  if(L.linked&&L.linked.length)
+    notes.push(`<strong>Matched across the two systems despite different names:</strong> `+
+      L.linked.map(x=>`${esc(x.pay)} = ${esc(x.sched)}`).join("; ")+
+      ` — Toast carries the legal name, 7shifts the preferred one. Check these are the same person.`);
   if(L.noMatchPay.length)
-    notes.push(`<strong>Clocked but not on the posted schedule:</strong> ${L.noMatchPay.map(esc).join(", ")}.`);
+    notes.push(`<strong>Clocked but not on the posted schedule:</strong> ${L.noMatchPay.map(esc).join(", ")}
+      — confirm each is genuinely unposted rather than spelled differently in 7shifts.`);
   if(L.noMatchSched.length)
     notes.push(`<strong>Posted but no Toast hours:</strong> ${L.noMatchSched.map(esc).join(", ")} — usually salaried, worth confirming.`);
   if(L.hasPay&&!L.hasSched)notes.push(`<strong>No 7shifts schedule for this week</strong>, so there's nothing to compare actual hours against.`);
