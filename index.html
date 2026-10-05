@@ -407,6 +407,9 @@ function money(n,forceCents){
     {minimumFractionDigits:c?2:0,maximumFractionDigits:c?2:0});
 }
 const pct=(n,d)=>d?((n/d)*100).toFixed(1)+"%":"—";
+// Hours come out of Toast as raw floats and summing them produces things like 17.099999999999998.
+// Every hour figure on screen goes through here.
+const hrs=n=>(Math.round((+n||0)*100)/100).toLocaleString("en-US",{maximumFractionDigits:2});
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function say(m){const t=document.getElementById("toast");t.innerHTML=m;t.className="on";
   clearTimeout(say._t);say._t=setTimeout(()=>t.className="",3000)}
@@ -1749,11 +1752,11 @@ function drawOT(key,L,tgt){
     const diag=
       o.diag==="scheduled"?`<span class="bad">Scheduled above 40.</span> Posted at <strong>${o.posted}</strong> hrs —
         the overtime was bought before the week started.`
-     :o.diag==="overran"?`Posted at <strong>${o.posted}</strong> hrs and worked <strong>${o.actual}</strong> —
+     :o.diag==="overran"?`Posted at <strong>${o.posted}</strong> hrs and worked <strong>${hrs(o.actual)}</strong> —
         overran by ${r2(o.actual-o.posted)}. The extra hours weren't on the schedule.`
      :`<span class="warn">No posted schedule</span> to compare against.`;
     const fix=
-      o.diag==="scheduled"?`Cut the posted week to 40. That removes <strong>${o.over40} hrs</strong> of overtime
+      o.diag==="scheduled"?`Cut the posted week to 40. That removes <strong>${hrs(o.over40)} hrs</strong> of overtime
         and <strong>${money(o.premium)}</strong> of premium, before anyone has to manage it mid-week.`
      :o.diag==="overran"?`The schedule was under 40 — this came from hours worked beyond it. Either approve
         them in advance or post them, so the overtime is a decision rather than a surprise.`
@@ -1762,21 +1765,21 @@ function drawOT(key,L,tgt){
       <div class="row" style="justify-content:space-between">
         <div><strong>${esc(o.emp)}</strong> <span class="mini dim">${o.sec}</span>
           ${repeat?`<span class="badge open">${hist.n} of last ${hist.seen} weeks</span>`:""}</div>
-        <span class="mini">${o.actual} hrs · <strong>${o.ot} OT</strong> · ${money(o.otPay)} paid ·
+        <span class="mini">${hrs(o.actual)} hrs · <strong>${hrs(o.ot)} OT</strong> · ${money(o.otPay)} paid ·
           <strong>${money(o.premium)}</strong> premium</span></div>
       <div class="mini" style="margin-top:5px">${diag}</div>
       <div class="mini" style="margin-top:4px"><strong>Fix:</strong> ${fix}</div>`;
     if(o.cover.length&&o.over40>0)
       h+=`<div class="mini" style="margin-top:4px"><strong>Who had room in ${o.sec} that week:</strong> `+
-        o.cover.map(c=>`${esc(c.emp.split(",")[0])} worked ${c.hrs} (${c.room} spare) at ${money(c.rate,true)}/hr`).join("; ")+
-        `. Moving ${o.over40} hrs to the cheapest of them saves about
+        o.cover.map(c=>`${esc(c.emp.split(",")[0])} worked ${hrs(c.hrs)} (${hrs(c.room)} spare) at ${money(c.rate,true)}/hr`).join("; ")+
+        `. Moving ${hrs(o.over40)} hrs to the cheapest of them saves about
         <strong>${money(r2(o.over40*(o.rate*1.5-o.cover[0].rate)))}</strong> —
         <span class="dim">if the work transfers, which the data can't tell you.</span></div>`;
     h+=`</div>`;
   });
   if(sal.length)
     h+=`<div class="mini dim" style="margin-top:4px"><strong>Ignore:</strong> `+
-      sal.map(o=>`${esc(o.emp)} ${o.ot} hrs`).join(", ")+
+      sal.map(o=>`${esc(o.emp)} ${hrs(o.ot)} hrs`).join(", ")+
       ` — salaried, $0.00 in Toast, so this "overtime" costs nothing. It shows every week and means nothing.</div>`;
   return h+`</div>`;
 }
@@ -1811,7 +1814,7 @@ function drawLabor(){
         :`target ${(tgt*100).toFixed(0)}% · ${pct<=tgt?"under":"over"} by ${Math.abs((pct-tgt)*100).toFixed(2)} pts`+
           (L.partial?` · ${DAYS[L.d0]}–${DAYS[L.d1]}`:"")}</div></div>
     <div class="kpi"><div class="k">Labor dollars</div><div class="v">${money(L.totPay)}</div>
-      <div class="n">${L.totHrs.toLocaleString()} hrs${L.excl.hrs?` · ${L.excl.hrs.toLocaleString()} pooled hrs excluded`:""}</div></div>
+      <div class="n">${hrs(L.totHrs)} hrs${L.excl.hrs?` · ${hrs(L.excl.hrs)} pooled hrs excluded`:""}</div></div>
     <div class="kpi"><div class="k">Sales per hour</div><div class="v">${L.perHr?money(L.perHr):"—"}</div>
       <div class="n">${L.excl.hrs?"pooled logins out of the denominator":"all counted hours"}</div></div>
     <div class="kpi"><div class="k">Posted vs actual</div>
@@ -1824,14 +1827,14 @@ function drawLabor(){
   LSEC.forEach(s=>{
     const d=L.sec[s],den=L.den[s];
     const p=(salesOK&&den>0)?d.pay/den:null;
-    h+=`<tr><td class="lbl">${s}</td><td class="num">${d.hrs.toLocaleString()}</td>
+    h+=`<tr><td class="lbl">${s}</td><td class="num">${hrs(d.hrs)}</td>
       <td class="num">${money(d.pay)}</td>
-      <td class="num ${d.ot?"warn":"dim"}">${d.ot||"—"}</td>
+      <td class="num ${d.ot?"warn":"dim"}">${d.ot?hrs(d.ot):"—"}</td>
       <td class="mini dim">${s.startsWith("ATP")?"ATP sales":"CKC sales"} ${den?money(den):"—"}</td>
       <td class="num total-col ${p==null?"dim":p<=tgt?"good":""}">${p==null?"—":(p*100).toFixed(2)+"%"}</td></tr>`;
   });
-  h+=`<tr class="tot"><td class="lbl">TOTAL</td><td class="num">${L.totHrs.toLocaleString()}</td>
-    <td class="num">${money(L.totPay)}</td><td class="num">${LSEC.reduce((x,s)=>x+L.sec[s].ot,0)||"—"}</td>
+  h+=`<tr class="tot"><td class="lbl">TOTAL</td><td class="num">${hrs(L.totHrs)}</td>
+    <td class="num">${money(L.totPay)}</td><td class="num">${L.otHrs?hrs(L.otHrs):"—"}</td>
     <td class="mini dim">all net sales ${L.tot?money(L.tot):"—"}</td>
     <td class="num total-col">${pct==null?"—":(pct*100).toFixed(2)+"%"}</td></tr></table>`;
   set("labSections",h);
@@ -1849,17 +1852,17 @@ function drawLabor(){
     shown.forEach(p=>{
       const c=p.var>0?"bad":p.var<0?"good":"dim";
       v+=`<tr><td class="lbl">${esc(p.emp)}${p.salaried?` <span class="mini dim">salaried</span>`:""}</td>
-        <td class="num">${p.posted.toLocaleString()}</td><td class="num">${p.actual.toLocaleString()}</td>
-        <td class="num ${c}">${p.var>0?"+":""}${p.var.toLocaleString()}</td>
+        <td class="num">${hrs(p.posted)}</td><td class="num">${hrs(p.actual)}</td>
+        <td class="num ${c}">${p.var>0?"+":""}${hrs(p.var)}</td>
         <td class="num ${c}">${p.posted?((p.var/p.posted*100)>0?"+":"")+(p.var/p.posted*100).toFixed(0)+"%":"—"}</td>
-        <td class="num ${p.ot?"warn":"dim"}">${p.ot||"—"}</td>
+        <td class="num ${p.ot?"warn":"dim"}">${p.ot?hrs(p.ot):"—"}</td>
         <td class="num total-col ${p.salaried?"dim":c}">${p.salaried?"—":money(p.dollars)}</td></tr>`;
     });
     if(near.length&&!state.labAll)
       v+=`<tr><td class="lbl dim" style="font-weight:400">on schedule</td>
         <td colspan="6" class="mini dim" style="text-align:left">
         ${near.length} ${near.length===1?"person is":"people are"} within an hour of their posted schedule
-        — ${near.slice(0,6).map(p=>esc(p.emp.split(",")[0])+" "+(p.var>0?"+":"")+p.var.toFixed(1)).join(", ")}${near.length>6?", …":""}
+        — ${near.slice(0,6).map(p=>esc(p.emp.split(",")[0])+" "+(p.var>0?"+":"")+hrs(p.var)).join(", ")}${near.length>6?", …":""}
         &nbsp;<a href="#" onclick="state.labAll=true;persist();render();return false">show all</a></td></tr>`;
     if(state.labAll)
       v+=`<tr><td colspan="7" class="mini dim" style="text-align:left">
@@ -1873,11 +1876,11 @@ function drawLabor(){
   const notes=[];
   if(Object.keys(L.excl.titles).length)
     notes.push(`<strong>Excluded as pooled logins:</strong> `+
-      Object.keys(L.excl.titles).map(t=>`${esc(t)} ${L.excl.titles[t].toLocaleString()} hrs`).join(", ")+
+      Object.keys(L.excl.titles).map(t=>`${esc(t)} ${hrs(L.excl.titles[t])} hrs`).join(", ")+
       ` — hours with no dollars behind them. They stay out of labor %, out of sales-per-hour, and out of the overtime flags.`);
   if(Object.keys(L.unmapped).length)
     notes.push(`<strong class="bad">Job titles with no section:</strong> `+
-      Object.keys(L.unmapped).map(t=>`${esc(t)} (${L.unmapped[t]} hrs)`).join(", ")+
+      Object.keys(L.unmapped).map(t=>`${esc(t)} (${hrs(L.unmapped[t])} hrs)`).join(", ")+
       ` — these are missing from every total above. Map them in Settings.`);
   if(L.noMatchPay.length)
     notes.push(`<strong>Clocked but not on the posted schedule:</strong> ${L.noMatchPay.map(esc).join(", ")}.`);
