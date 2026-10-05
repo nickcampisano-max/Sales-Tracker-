@@ -238,6 +238,28 @@ Pages redeploys in a minute or two. Anyone with the page already open should rel
 
 Newest first. Dates are when the work landed, not when it was deployed.
 
+## 2026-10-05 — overtime, and tidying
+
+- **Overtime is its own block** at the top of the labor section: who had it, how much, what the premium
+  cost, and a diagnosis — *scheduled above 40* versus *overran an under-40 schedule*. Those need opposite
+  fixes, and the distinction is the point of the panel.
+- Each flag carries a suggested action with the arithmetic behind it, plus who in the same section had
+  room that week and at what rate. Where the data can't know something — whether the work actually
+  transfers — it says so rather than implying a saving.
+- Salaried staff showing overtime are listed separately as ignorable. Theirs is $0.00 in Toast and would
+  otherwise appear every week and bury the real flags.
+- Repeat offenders carry a badge showing how many of the recent weeks they've had overtime.
+- People within an hour of their posted schedule collapse to one line that still names them, instead of
+  dropping off the table. Previously someone vanished on the week they finally hit their schedule, which
+  hid the good news.
+- All hour figures rounded to two decimals. Summed floats were producing things like 17.099999999999998.
+
+### Why it's still three sales exports
+
+The lunch/dinner boundary is a **time** cut. Revenue centres don't encode time — Central Dining Room holds
+both — so no revenue-centre report can produce that split, and a combined daily total has nothing to split
+on. Three filtered exports plus payroll and schedule is the honest minimum. Five files, one drag.
+
 ## 2026-10-01 — labor
 
 - **New section 4, Labor**, in the default view. Labor % against target; hours, dollars and overtime by
