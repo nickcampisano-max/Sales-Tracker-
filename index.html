@@ -112,13 +112,25 @@ ol.steps b{color:var(--tx)}
 
 <!-- ═══ 1 IMPORT ═══ -->
 <div class="panel hideInReview">
-  <h2>1 &middot; Drop the Toast exports</h2>
+  <h2>1 &middot; Drop the weekly exports</h2>
   <div class="mini" style="margin-bottom:9px">
-    Toast &rarr; <em>Sales by day</em>, one export per bucket:
-    <span class="swatch" style="background:var(--am)"></span><strong>CKC Lunch</strong> 10am&ndash;3pm,
-    <span class="swatch" style="background:var(--pm)"></span><strong>CKC Dinner</strong> 3pm&ndash;close,
-    <span class="swatch" style="background:var(--atp)"></span><strong>ATP</strong> 5pm&ndash;close.
-    Any date range, any number of weeks &mdash; pull twelve months at once if you want to backfill.
+    <strong>Five files a week.</strong> Drop them all at once &mdash; they&rsquo;re sorted by filename.
+    <div style="margin:7px 0 0 0;padding-left:2px;line-height:1.75">
+      <div style="opacity:.75;letter-spacing:.04em;font-size:.92em">SALES &mdash; Toast &rarr; <em>Sales by day</em>, one export per bucket</div>
+      <div><span class="swatch" style="background:var(--am)"></span><strong>CKC Lunch</strong> &mdash; time filter <strong>10am&ndash;3pm</strong></div>
+      <div><span class="swatch" style="background:var(--pm)"></span><strong>CKC Dinner</strong> &mdash; time filter <strong>3pm&ndash;close</strong></div>
+      <div><span class="swatch" style="background:var(--atp)"></span><strong>ATP</strong> &mdash; time filter <strong>5pm&ndash;close</strong></div>
+      <div style="opacity:.75;letter-spacing:.04em;font-size:.92em;margin-top:5px">LABOR</div>
+      <div><span class="swatch" style="background:var(--tx3)"></span><strong>Toast payroll export</strong> &mdash;
+        <strong>one week only.</strong> The file has no dates inside it, so the week is read from the
+        filename: <code>PayrollExport_2026_10_05-2026_10_11.csv</code></div>
+      <div><span class="swatch" style="background:var(--tx3)"></span><strong>7shifts schedule</strong> &mdash;
+        the weekly grid export, one week per file</div>
+    </div>
+    <div style="margin-top:7px">
+      Sales exports take any date range &mdash; pull twelve months at once to backfill. Payroll and schedule
+      are one week each. Sales alone will import fine; labor just stays blank until both labor files land.
+    </div>
   </div>
   <div id="drop"><strong>Drop CSVs here</strong> or click to choose
     <div class="mini" style="margin-top:4px">A saved <code>.json</code> workbook works here too</div></div>

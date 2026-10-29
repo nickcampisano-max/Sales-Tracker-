@@ -238,6 +238,23 @@ Pages redeploys in a minute or two. Anyone with the page already open should rel
 
 Newest first. Dates are when the work landed, not when it was deployed.
 
+## 2026-10-29 — the import panel now lists all five files
+
+The drop panel described only the three sales exports, which it had done since before labor existed.
+The two labor files were documented here but nowhere on the page, so anyone working from the page
+alone had no way to know the week needed five files rather than three.
+
+- Section 1 is now **"Drop the weekly exports"** and lists all five under **Sales** and **Labor**
+  headings, with each sales bucket's Toast time filter stated next to it.
+- **The payroll filename pattern is spelled out inline.** That export carries no dates inside it, so
+  the week is read from the filename — the one input that fails quietly if someone pulls a range
+  instead of a single week.
+- Added a line that sales will import on their own and labor simply stays blank until both labor
+  files land. This was already true, but the page gave no sign of it, and a labor-only drop looking
+  like a failure had already come up once.
+
+No parsing or calculation changed — presentation only.
+
 ## 2026-10-06 — posted vs actual by department, and a name-matching fix
 
 - **Posted vs actual is now broken out by department** — BOH, FOH/Bar, ATP BOH, ATP Bar — each showing
